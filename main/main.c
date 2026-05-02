@@ -39,8 +39,7 @@ static int locked = 0;
 static int quiet_change = 1;
 static int was_quiet = 0;
 static int time_to_change = 0;
-static int allow_fft = 0;
-static int use_fft = 0;
+static int use_fft = 0; // palette-morph mode: blends adjacent palettes by audio rhythm
 
 // --- Initialization ---
 
@@ -68,6 +67,69 @@ void init_tables(void)
     }
 }
 
+// Pseudo-FFT from original PETE.C: analyzes zero-crossing run lengths and
+// peak-to-peak amplitudes in stereo[], builds a histogram (slab[]), then
+// blends LUTbuffer entries toward adjacent palettes by 0-6 steps based on
+// the histogram. display_render() picks up the modified LUTbuffer each frame.
+// The result is a palette that morphs in response to audio rhythm and texture.
+static void apply_fft(void)
+{
+    static int slab[64]; // only indices 0..31 are used; 64 for safety
+    int i, got, dir, curr_dir, last_dir, last_got, lens, last_cap, next_one, amt;
+
+    for (i = 0; i < 64; i++) slab[i] = 0;
+
+    for (int ch = 0; ch < 2; ch++) {
+        last_got  = 128;
+        last_dir  = 1;
+        last_cap  = 128;
+        next_one  = 1;
+        lens      = 0;
+
+        for (i = 0; i < (int)BUFF_WIDTH; i++) {
+            got = stereo[i][ch];
+            dir = got - last_got;
+
+            if      (dir >  1) curr_dir =  1;
+            else if (dir < -1) curr_dir = -1;
+            else               curr_dir = last_dir;
+
+            if (curr_dir != last_dir) {
+                if (lens > 255) lens = 255;
+                slab[lens >> 3] += (lens >> 1);
+                lens = 0;
+
+                if (next_one) {
+                    next_one = 0;
+                    last_cap = got;
+                } else {
+                    next_one = 1;
+                    amt = abs(last_cap - got);
+                    if (amt > 127) amt = 127;
+                    slab[amt >> 2]++;
+                }
+            } else {
+                lens++;
+            }
+
+            last_dir = curr_dir;
+            last_got = got;
+        }
+    }
+
+    // Blend each LUTbuffer entry toward adjacent palettes by the histogram value
+    uint8_t *p = LUTbuffer;
+    for (i = 0; i < 256; i++) {
+        int temp = slab[(255 - i) >> 3];
+        if (temp > 6) temp = 6;
+        const uint8_t *q = LUTfiles[(curpal + temp) % numluts] + i * 3;
+        *p++ = q[0];
+        *p++ = q[1];
+        *p++ = q[2];
+    }
+    // pal_lut[] is rebuilt from LUTbuffer at the start of each display_render()
+}
+
 static void randomize_all(void)
 {
     curtable = esp_random() % NUMTABLES;
@@ -77,6 +139,7 @@ static void randomize_all(void)
     curdisplay = change_display(esp_random() % numdisplays);
     if (nrtrans && !(esp_random() % 5))
         translate_idx = esp_random() % nrtrans;
+    use_fft = !(esp_random() % 4); // 25% chance of palette-morph mode
     boom_boxes_randomize();
 }
 
@@ -163,6 +226,8 @@ static void render_task(void *arg)
 
         // Audio capture and wave rendering
         if (get_stereo_data()) {
+            if (use_fft)
+                apply_fft();
             wave();
             if (quiet_change && quiet > quiet_change) {
                 was_quiet = 1;
@@ -209,13 +274,14 @@ static void render_task(void *arg)
                 if (blank_frames == 60) {
                     int tidx = ct_clamp(translate_idx, 0, 4);
                     ESP_LOGW(TAG, "BLANK %d frames: flame=%d(%s) wave=%d(%s) "
-                             "disp=%d(%s) pal=%d(%s) trans=%d(%s)",
+                             "disp=%d(%s) pal=%d(%s) trans=%d(%s) fft=%d",
                              blank_frames,
                              curflame,      flamearray[curflame].name,
                              usewave,       wavearray[usewave].name,
                              curdisplay,    disparray[curdisplay].name,
                              curpal,        curpal < 8 ? pal_names[curpal] : "?",
-                             translate_idx, trans_names[tidx]);
+                             translate_idx, trans_names[tidx],
+                             use_fft);
                     was_blank = true;
                 }
             } else {
