@@ -225,19 +225,26 @@ static void wave_walking(void)
     }
 }
 
-// Falling — scrolling rows
+// Falling — scrolling rows within the bottom seeding zone.
+// Original cycled row through 0..BUFF_BOTTOM-2 (the full buffer), which
+// caused blanking: table[0] maps silence to index 0 (black), so Falling
+// would actively erase flame-sustained content mid-screen during quiet
+// periods. Constraining to the bottom seeding zone keeps writes where the
+// flame can propagate from them rather than wiping what it sustains.
 static void wave_falling(void)
 {
     static int row = 0;
     int half = (int)(BUFF_WIDTH / 2);
-    row = (row + 1) % (BUFF_BOTTOM - 1);
+    // Cycle through 8 rows just above the cleared seeding rows (236-239)
+    row = (row + 1) % 8;
+    int base = (int)(BUFF_BOTTOM - 10) + row; // rows 226-233
 
     for (int i = 0; i < (int)half; i++) {
-        buff[(row + 1) * BUFF_WIDTH + i]        = table[curtable][stereo[i][0] & 0xFF];
-        buff[(row + 1) * BUFF_WIDTH + i + half]  = table[curtable][stereo[i][1] & 0xFF];
+        buff[(base + 1) * BUFF_WIDTH + i]        = table[curtable][stereo[i][0] & 0xFF];
+        buff[(base + 1) * BUFF_WIDTH + i + half]  = table[curtable][stereo[i][1] & 0xFF];
         int idx2 = (i + half) % BUFF_WIDTH;
-        buff[row * BUFF_WIDTH + i]               = table[curtable][stereo[idx2][0] & 0xFF];
-        buff[row * BUFF_WIDTH + i + half]         = table[curtable][stereo[idx2][1] & 0xFF];
+        buff[base * BUFF_WIDTH + i]               = table[curtable][stereo[idx2][0] & 0xFF];
+        buff[base * BUFF_WIDTH + i + half]         = table[curtable][stereo[idx2][1] & 0xFF];
     }
 }
 
