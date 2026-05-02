@@ -256,6 +256,22 @@ screen goes dark for more than 2 seconds.
 | 2 | Ocean | 6 | Rainbow |
 | 3 | Acid | 7 | Hot Metal |
 
+### Pseudo-FFT Palette Morph — toggleable, not a numbered axis
+
+When active, analyzes zero-crossings and peak-to-peak amplitudes in the
+audio each frame and uses them to blend palette entries toward adjacent
+palettes by up to 6 steps. The result is a continuous colour shimmer that
+responds to the texture and rhythm of the audio rather than raw volume —
+percussive or rhythmic content produces sudden full-palette surges, while
+steady tones give a gentle drift. The effect is most dramatic with the
+**Rainbow** palette, where the blending sweeps the full hue spectrum in
+pulses that resemble sheet lightning. Quiet passages let the palette
+relax back toward the base selection.
+
+Toggle with a **three-finger tap**. Ported from `FFT()` in the original
+Cthugha v5.3 `PETE.C` — the function existed but was disabled with
+`#if 0`, likely due to CPU cost on the original 486 hardware.
+
 ### Boom Boxes — randomly active, not a numbered axis
 
 Two colored squares (one per stereo mic channel) bounce around the
