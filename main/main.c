@@ -174,12 +174,28 @@ static void handle_touch(touch_gesture_t gesture)
                 translate_idx = (translate_idx + 1) % (nrtrans + 1);
             break;
 
-        case TOUCH_LONG_PRESS:
-            // Toggle lock
+        case TOUCH_LONG_PRESS: {
             locked = !locked;
             if (!locked)
                 randomize_all();
+            static const char *pal_names[] = {
+                "Royal Purple","Fire","Ocean","Acid","Sunset","Ice","Rainbow","Hot Metal"
+            };
+            static const char *trans_names[] = {
+                "None","Swirl","Tunnel","Fisheye","Ripple"
+            };
+            int tidx = ct_clamp(translate_idx, 0, 4);
+            ESP_LOGI(TAG, "STATE [%s]: flame=%d(%s) wave=%d(%s) disp=%d(%s) "
+                     "pal=%d(%s) trans=%d(%s) fft=%d boom=%d",
+                     locked ? "LOCKED" : "unlocked",
+                     curflame,      flamearray[curflame].name,
+                     usewave,       wavearray[usewave].name,
+                     curdisplay,    disparray[curdisplay].name,
+                     curpal,        curpal < 8 ? pal_names[curpal] : "?",
+                     translate_idx, trans_names[tidx],
+                     use_fft, boom_boxes_active);
             break;
+        }
 
         case TOUCH_DOUBLE_TAP:
             randomize_all();
@@ -191,6 +207,7 @@ static void handle_touch(touch_gesture_t gesture)
 
         case TOUCH_THREE_FINGER_TAP:
             use_fft = !use_fft;
+            ESP_LOGI(TAG, "FFT state = %s", use_fft ? "on" : "off");
             break;
 
         default:
