@@ -1,3 +1,5 @@
+[![Build](https://github.com/cgyab/cthugha-esp/actions/workflows/build.yml/badge.svg)](https://github.com/cgyab/cthugha-esp/actions/workflows/build.yml)
+
 # Cthugha ESP32-P4
 
 An ESP32-P4 port of **Cthugha v5.3** — the classic 1993 real-time audio
