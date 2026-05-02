@@ -26,6 +26,7 @@ static int last_x = -1, last_y = -1;
 static int start_x = -1, start_y = -1;
 static TickType_t press_start = 0;
 static bool was_pressed = false;
+static uint8_t max_fingers = 0; // peak finger count during current press
 
 #define SWIPE_THRESHOLD  60
 #define LONG_PRESS_MS   800
@@ -82,11 +83,11 @@ touch_gesture_t touch_input_poll(void)
 
     esp_lcd_touch_read_data(touch_handle);
 
-    uint16_t x[1], y[1];
-    uint16_t strength[1];
+    uint16_t x[3], y[3];
+    uint16_t strength[3];
     uint8_t count = 0;
     bool pressed = esp_lcd_touch_get_coordinates(touch_handle,
-                                                  x, y, strength, &count, 1);
+                                                  x, y, strength, &count, 3);
 
     touch_gesture_t gesture = TOUCH_NONE;
 
@@ -95,18 +96,24 @@ touch_gesture_t touch_input_poll(void)
             start_x = x[0];
             start_y = y[0];
             press_start = xTaskGetTickCount();
+            max_fingers = 0;
         }
+        if (count > max_fingers) max_fingers = count;
         last_x = x[0];
         last_y = y[0];
         was_pressed = true;
     } else if (was_pressed) {
-        // Released — determine gesture
+        // Released — multi-finger taps take priority over single-finger gestures
         was_pressed = false;
         TickType_t duration = xTaskGetTickCount() - press_start;
         int dx = last_x - start_x;
         int dy = last_y - start_y;
 
-        if (duration > pdMS_TO_TICKS(LONG_PRESS_MS)) {
+        if (max_fingers >= 3) {
+            gesture = TOUCH_THREE_FINGER_TAP;
+        } else if (max_fingers == 2) {
+            gesture = TOUCH_TWO_FINGER_TAP;
+        } else if (duration > pdMS_TO_TICKS(LONG_PRESS_MS)) {
             gesture = TOUCH_LONG_PRESS;
         } else if (abs(dx) > SWIPE_THRESHOLD || abs(dy) > SWIPE_THRESHOLD) {
             if (abs(dx) > abs(dy)) {

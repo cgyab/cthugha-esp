@@ -182,8 +182,15 @@ static void handle_touch(touch_gesture_t gesture)
             break;
 
         case TOUCH_DOUBLE_TAP:
-            // Randomize everything
             randomize_all();
+            break;
+
+        case TOUCH_TWO_FINGER_TAP:
+            boom_boxes_active = !boom_boxes_active;
+            break;
+
+        case TOUCH_THREE_FINGER_TAP:
+            use_fft = !use_fft;
             break;
 
         default:

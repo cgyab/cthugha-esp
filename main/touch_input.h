@@ -12,6 +12,8 @@ typedef enum {
     TOUCH_SWIPE_DOWN,
     TOUCH_LONG_PRESS,
     TOUCH_DOUBLE_TAP,
+    TOUCH_TWO_FINGER_TAP,
+    TOUCH_THREE_FINGER_TAP,
 } touch_gesture_t;
 
 void touch_input_init(void);
