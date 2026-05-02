@@ -250,7 +250,9 @@ static void flame_skyline(void)
     }
 }
 
-// Weird — uses OR instead of ADD, then decrement
+// Weird — OR of neighbors (bitwise, not average) with halving decay.
+// OR creates unusual bit-pattern spreading; >>1 each step prevents the
+// single-decrement saturation that would flood the screen with one color.
 static void flame_weird(void)
 {
     for (unsigned int y = 0; y < BUFF_HEIGHT - 1; y++) {
@@ -259,8 +261,7 @@ static void flame_weird(void)
             if (x > 0) v |= buff[(y+1) * BUFF_WIDTH + x - 1];
             if (x + 1 < BUFF_WIDTH) v |= buff[(y+1) * BUFF_WIDTH + x + 1];
             if (y + 2 < BUFF_HEIGHT) v |= buff[(y+2) * BUFF_WIDTH + x];
-            if (v) v--;
-            buff[y * BUFF_WIDTH + x] = (uint8_t)v;
+            buff[y * BUFF_WIDTH + x] = (uint8_t)(v >> 1);
         }
     }
 }
