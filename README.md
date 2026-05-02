@@ -173,7 +173,10 @@ Touch gestures replace the original keyboard controls:
 | Swipe left | Next color palette |
 | Swipe up | Next display mode (mirror/kaleidoscope) |
 | Swipe down | Next translation effect (swirl/tunnel/etc.) |
-| Long press | Toggle lock (freezes current effect combination) |
+| Long press | Toggle lock + print current effect state to serial |
+| Double tap | Randomize all effects |
+| Two-finger tap | Toggle boom boxes on/off |
+| Three-finger tap | Toggle pseudo-FFT palette morph on/off |
 
 ## How It Works
 
