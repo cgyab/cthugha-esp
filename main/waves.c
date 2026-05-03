@@ -425,17 +425,16 @@ static void wave_pete(void)
         left  += abs(stereo[x][0] - 128);
         right += abs(stereo[x][1] - 128);
     }
-    left  = ct_min(left / half, (int)BUFF_BOTTOM);
-    right = ct_min(right / half, (int)BUFF_BOTTOM);
+    int mono = ct_min((left + right) / 2 / half, (int)BUFF_BOTTOM);
 
     for (int x = 0; x < (int)half; x++) {
         int temp = stereo[x][0];
-        int py = ct_clamp(BUFF_BOTTOM - (abs(left * sine_table[x]) >> 8), 0, BUFF_HEIGHT - 1);
+        int py = ct_clamp(BUFF_BOTTOM - (abs(mono * sine_table[x]) >> 8), 0, BUFF_HEIGHT - 1);
         buff[py * BUFF_WIDTH + x] = table[curtable][temp & 0xFF];
     }
     for (int x = half; x < (int)BUFF_WIDTH; x++) {
         int temp = stereo[x][1];
-        int py = ct_clamp(BUFF_BOTTOM - (abs(right * sine_table[x]) >> 8), 0, BUFF_HEIGHT - 1);
+        int py = ct_clamp(BUFF_BOTTOM - (abs(mono * sine_table[x]) >> 8), 0, BUFF_HEIGHT - 1);
         buff[py * BUFF_WIDTH + x] = table[curtable][temp & 0xFF];
     }
 }
