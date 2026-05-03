@@ -125,6 +125,75 @@ static void gen_moles(uint16_t *map, float delta_r, float delta_a)
     }
 }
 
+// Down-spiral: pixel at (i,j) reads from (i+dx, j+dy) where the offset is
+// perpendicular to (ang - 45°) at magnitude dist/10. Creates a 45°-phase
+// spiral pull toward/away from center, stronger at the edges.
+// Wraps out-of-bounds with abs()%BSIZE rather than clamping (original behavior).
+static void gen_downspiral(uint16_t *map)
+{
+    float cx = BUFF_WIDTH  / 2.0f;
+    float cy = BUFF_HEIGHT / 2.0f;
+    float p  = (float)M_PI / 4.0f;
+
+    for (int j = 0; j < (int)BUFF_HEIGHT; j++) {
+        for (int i = 0; i < (int)BUFF_WIDTH; i++) {
+            int dx, dy;
+            if (j == 0 || j == (int)BUFF_HEIGHT - 1 ||
+                i == 0 || i == (int)BUFF_WIDTH  - 1) {
+                dx = (int)roundf((cx - i) * 0.75f);
+                dy = (int)roundf((cy - j) * 0.75f);
+            } else {
+                float dist = sqrtf((i - cx) * (i - cx) + (j - cy) * (j - cy));
+                float ang  = atan2f((float)(j) - cy, (float)(i) - cx);
+                dx = (int)roundf(-sinf(ang - p) * dist / 10.0f);
+                dy = (int)roundf( cosf(ang - p) * dist / 10.0f);
+            }
+            int idx = abs((i + dx) + (j + dy) * (int)BUFF_WIDTH) % (int)BUFF_SIZE;
+            map[j * BUFF_WIDTH + i] = (uint16_t)idx;
+        }
+    }
+}
+
+// Big half-wheel: center off-screen at (0.4*W, 0) — top edge, left of center.
+// Each pixel is swept radially around that off-screen pivot point, creating
+// an asymmetric swooping distortion across the whole buffer.
+// Wraps out-of-bounds with abs()%BSIZE (original behavior).
+static void gen_bighalfwheel(uint16_t *map)
+{
+    float cx = BUFF_WIDTH  * 0.4f;
+    float cy = 0.0f;
+    float q  = (float)M_PI / 2.0f;
+
+    for (int j = 0; j < (int)BUFF_HEIGHT; j++) {
+        for (int i = 0; i < (int)BUFF_WIDTH; i++) {
+            int dx, dy;
+            if (j == 0 || j == (int)BUFF_HEIGHT - 1) {
+                dx = (int)((cx - i) * 0.75f);
+                dy = (int)(cy - j);
+            } else {
+                float fi   = (float)i;
+                float fj   = (float)j;
+                float dist = sqrtf((fi - cx) * (fi - cx) + (fj - cy) * (fj - cy));
+                float ang;
+                if (fi == cx)
+                    ang = (fj > cx) ? q : -q;
+                else
+                    ang = atanf((fj - cy) / (fi - cx));
+                if (fi < cx) ang += (float)M_PI;
+                if (dist < (float)BUFF_HEIGHT) {
+                    dx = (int)ceilf(-sinf(ang) * dist / 10.0f);
+                    dy = (int)ceilf( cosf(ang) * dist / 10.0f);
+                } else {
+                    dx = (i < (int)cx) ? 3 : -3;
+                    dy = 0;
+                }
+            }
+            int idx = abs((j + dy) * (int)BUFF_WIDTH + (i + dx)) % (int)BUFF_SIZE;
+            map[j * BUFF_WIDTH + i] = (uint16_t)idx;
+        }
+    }
+}
+
 static void gen_ripple(uint16_t *map)
 {
     int cx = BUFF_WIDTH / 2;
@@ -152,7 +221,7 @@ void init_translate(void)
         trans_maps[i] = NULL;
 
     // Allocate and generate built-in maps
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 7; i++) {
         trans_maps[i] = (uint16_t *)malloc(BUFF_SIZE * sizeof(uint16_t));
         if (!trans_maps[i]) break;
         nrtrans++;
@@ -163,6 +232,8 @@ void init_translate(void)
     if (nrtrans >= 3) gen_fisheye(trans_maps[2]);
     if (nrtrans >= 4) gen_ripple(trans_maps[3]);
     if (nrtrans >= 5) gen_moles(trans_maps[4], 2.0f, 0.1f);
+    if (nrtrans >= 6) gen_downspiral(trans_maps[5]);
+    if (nrtrans >= 7) gen_bighalfwheel(trans_maps[6]);
 
     translate_idx = 0;
 }

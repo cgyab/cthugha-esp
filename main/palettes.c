@@ -9,8 +9,9 @@ uint8_t LUTbuffer[LUTSIZE];
 uint8_t LUTfiles[MAXLUTS][LUTSIZE];
 int numluts = 0;
 int curpal = 0;
-int use_pal_cycle = 0;
+int use_pal_cycle    = 0;
 int pal_cycle_offset = 0;
+int pal_cycle_speed  = 10; // frames per step: 5=fast, 10=medium, 20=slow
 
 static void set_entry(uint8_t *pal, int idx, uint8_t r, uint8_t g, uint8_t b)
 {

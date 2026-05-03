@@ -40,10 +40,6 @@ static inline uint16_t rgb888_to_rgb565(uint8_t r, uint8_t g, uint8_t b)
            ((uint16_t)(b >> 3));
 }
 
-// JS reference: cycleSpeed=5 @ 30fps → 6 entries/sec → full 256-cycle in ~43s.
-// At 60fps: advance 1 entry every 10 frames to match the same wall-clock rate.
-#define PAL_CYCLE_FRAMES 10
-
 static void update_palette_lut(void)
 {
     for (int i = 0; i < 256; i++) {
@@ -54,7 +50,7 @@ static void update_palette_lut(void)
     }
     if (use_pal_cycle) {
         static int cycle_counter = 0;
-        if (++cycle_counter >= PAL_CYCLE_FRAMES) {
+        if (++cycle_counter >= pal_cycle_speed) {
             cycle_counter = 0;
             pal_cycle_offset = (pal_cycle_offset + 1) & 0xFF;
         }

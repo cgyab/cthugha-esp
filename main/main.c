@@ -141,6 +141,10 @@ static void randomize_all(void)
         translate_idx = esp_random() % nrtrans;
     use_fft = !(esp_random() % 4);       // 25% chance of palette-morph mode
     use_pal_cycle = !(esp_random() % 4); // 25% chance of palette rotation
+    if (use_pal_cycle) {
+        static const int speeds[] = {5, 10, 20};
+        pal_cycle_speed = speeds[esp_random() % 3]; // fast / medium / slow
+    }
     use_alignment = !(esp_random() % 2); // 50% chance of zero-crossing alignment
     boom_boxes_randomize();
 }
@@ -185,9 +189,10 @@ static void handle_touch(touch_gesture_t gesture)
                 "Neon","Rainbow","Fire Storm","Volcano"
             };
             static const char *trans_names[] = {
-                "None","Swirl","Tunnel","Fisheye","Ripple","Moles"
+                "None","Swirl","Tunnel","Fisheye","Ripple","Moles",
+                "Downspiral","HalfWheel"
             };
-            int tidx = ct_clamp(translate_idx, 0, 5);
+            int tidx = ct_clamp(translate_idx, 0, 7);
             ESP_LOGI(TAG, "STATE [%s]: flame=%d(%s) wave=%d(%s) disp=%d(%s) "
                      "pal=%d(%s) trans=%d(%s) fft=%d palcyc=%d align=%d "
                      "boom=%d tblclr=%d scale=%d",
@@ -291,7 +296,8 @@ static void render_task(void *arg)
                 "Neon","Rainbow","Fire Storm","Volcano"
             };
             static const char *trans_names[] = {
-                "None","Swirl","Tunnel","Fisheye","Ripple","Moles"
+                "None","Swirl","Tunnel","Fisheye","Ripple","Moles",
+                "Downspiral","HalfWheel"
             };
             static int blank_frames = 0;
             static bool was_blank = false;
@@ -302,7 +308,7 @@ static void render_task(void *arg)
             if (max_px < 10) {
                 blank_frames++;
                 if (blank_frames == 60) {
-                    int tidx = ct_clamp(translate_idx, 0, 5);
+                    int tidx = ct_clamp(translate_idx, 0, 7);
                     ESP_LOGW(TAG, "BLANK %d frames: flame=%d(%s) wave=%d(%s) "
                              "disp=%d(%s) pal=%d(%s) trans=%d(%s) fft=%d palcyc=%d align=%d",
                              blank_frames,
