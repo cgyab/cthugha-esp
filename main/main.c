@@ -36,9 +36,27 @@ int rand_time = 750;
 int curflame = 0;
 
 static int locked = 0;
+
+// Per-axis locks — respected by randomize_all() and the auto-timer.
+// Set to 1 = that axis won't change during randomization.
+// Configured by gestures while globally locked (long press).
+static int lock_flame     = 0;
+static int lock_wave      = 0;
+static int lock_palette   = 0;
+static int lock_display   = 0;
+static int lock_translate = 0;
+static int lock_boom      = 0;
+
+static int all_axes_locked(void) {
+    return lock_flame && lock_wave && lock_palette
+        && lock_display && lock_translate && lock_boom;
+}
+static void set_all_axis_locks(int v) {
+    lock_flame = lock_wave = lock_palette =
+    lock_display = lock_translate = lock_boom = v;
+}
 static int quiet_change = 1;
 static int was_quiet = 0;
-static int time_to_change = 0;
 static int use_fft = 0; // palette-morph mode: blends adjacent palettes by audio rhythm
 
 // --- Initialization ---
@@ -132,96 +150,136 @@ static void apply_fft(void)
 
 static void randomize_all(void)
 {
-    curtable = esp_random() % NUMTABLES;
-    fill_lut_buffer(esp_random() % numluts);
-    curflame = change_flame(esp_random());
-    change_wave(esp_random() % numwaves);
-    curdisplay = change_display(esp_random() % numdisplays);
-    if (nrtrans && !(esp_random() % 5))
+    if (!lock_flame)     curflame   = change_flame(esp_random());
+    if (!lock_wave)      change_wave(esp_random() % numwaves);
+    if (!lock_palette)   fill_lut_buffer(esp_random() % numluts);
+    if (!lock_display)   curdisplay = change_display(esp_random() % numdisplays);
+    if (!lock_translate && nrtrans && !(esp_random() % 5))
         translate_idx = esp_random() % nrtrans;
-    use_fft = !(esp_random() % 4);       // 25% chance of palette-morph mode
-    use_pal_cycle = !(esp_random() % 4); // 25% chance of palette rotation
+
+    // These flags are not per-axis locked — always re-rolled
+    curtable      = esp_random() % NUMTABLES;
+    use_fft       = !(esp_random() % 4);
+    use_pal_cycle = !(esp_random() % 4);
     if (use_pal_cycle) {
         static const int speeds[] = {5, 10, 20};
-        pal_cycle_speed = speeds[esp_random() % 3]; // fast / medium / slow
+        pal_cycle_speed = speeds[esp_random() % 3];
     }
-    use_alignment = !(esp_random() % 2); // 50% chance of zero-crossing alignment
-    boom_boxes_randomize();
+    use_alignment = !(esp_random() % 2);
+
+    if (!lock_boom) boom_boxes_randomize();
 }
 
 // --- Touch gesture handling ---
 
 static void handle_touch(touch_gesture_t gesture)
 {
-    switch (gesture) {
-        case TOUCH_TAP:
-            // Cycle wave mode
-            next_wave();
-            break;
+    if (locked) {
+        // In locked mode gestures configure per-axis locks rather than
+        // cycling effects.  The axis<→gesture mapping mirrors the unlocked
+        // cycling mapping so the controls stay intuitive.
+        switch (gesture) {
+            case TOUCH_TAP:          lock_wave      = !lock_wave;      break;
+            case TOUCH_SWIPE_RIGHT:  lock_flame     = !lock_flame;     break;
+            case TOUCH_SWIPE_LEFT:   lock_palette   = !lock_palette;   break;
+            case TOUCH_SWIPE_UP:     lock_display   = !lock_display;   break;
+            case TOUCH_SWIPE_DOWN:   lock_translate = !lock_translate; break;
+            case TOUCH_TWO_FINGER_TAP: lock_boom    = !lock_boom;      break;
 
-        case TOUCH_SWIPE_RIGHT:
-            // Next flame
-            curflame = change_flame(curflame + 1);
-            break;
-
-        case TOUCH_SWIPE_LEFT:
-            // Next palette
-            fill_lut_buffer((curpal + 1) % numluts);
-            break;
-
-        case TOUCH_SWIPE_UP:
-            // Next display mode
-            curdisplay = change_display((curdisplay + 1) % numdisplays);
-            break;
-
-        case TOUCH_SWIPE_DOWN:
-            // Next translation
-            if (nrtrans > 0)
-                translate_idx = (translate_idx + 1) % (nrtrans + 1);
-            break;
-
-        case TOUCH_LONG_PRESS: {
-            locked = !locked;
-            if (!locked)
+            case TOUCH_LONG_PRESS: {
+                // If all axes locked: full unlock + randomize.
+                // If some axes unlocked: unlock global, resume with current locks.
+                locked = 0;
+                if (all_axes_locked()) set_all_axis_locks(0);
                 randomize_all();
-            static const char *pal_names[] = {
-                "Royal Purple","Fire","Ocean","Acid","Sunset",
-                "Neon","Rainbow","Fire Storm","Volcano"
-            };
-            static const char *trans_names[] = {
-                "None","Swirl","Tunnel","Fisheye","Ripple","Moles",
-                "Downspiral","HalfWheel"
-            };
-            int tidx = ct_clamp(translate_idx, 0, 7);
-            ESP_LOGI(TAG, "STATE [%s]: flame=%d(%s) wave=%d(%s) disp=%d(%s) "
-                     "pal=%d(%s) trans=%d(%s) fft=%d palcyc=%d align=%d "
-                     "boom=%d tblclr=%d scale=%d",
-                     locked ? "LOCKED" : "unlocked",
-                     curflame,      flamearray[curflame].name,
-                     usewave,       wavearray[usewave].name,
-                     curdisplay,    disparray[curdisplay].name,
-                     curpal,        curpal < 9 ? pal_names[curpal] : "?",
-                     translate_idx, trans_names[tidx],
-                     use_fft, use_pal_cycle, use_alignment,
-                     boom_boxes_active, boom_table_color, boom_scale);
-            break;
+                break;
+            }
+
+            case TOUCH_DOUBLE_TAP:
+                // Nuclear option: clear all locks and full randomize.
+                set_all_axis_locks(0);
+                randomize_all();
+                break;
+
+            case TOUCH_THREE_FINGER_TAP:
+                use_fft = !use_fft;
+                break;
+
+            default: break;
         }
 
-        case TOUCH_DOUBLE_TAP:
-            randomize_all();
-            break;
+        // Log the lock state after any locked-mode gesture
+        ESP_LOGI(TAG, "LOCKS [%s]: flame=%d wave=%d pal=%d disp=%d trans=%d boom=%d",
+                 locked ? "locked" : "UNLOCKED",
+                 lock_flame, lock_wave, lock_palette,
+                 lock_display, lock_translate, lock_boom);
 
-        case TOUCH_TWO_FINGER_TAP:
-            boom_boxes_active = !boom_boxes_active;
-            break;
+    } else {
+        // Normal unlocked mode: gestures cycle effects.
+        switch (gesture) {
+            case TOUCH_TAP:
+                next_wave();
+                break;
 
-        case TOUCH_THREE_FINGER_TAP:
-            use_fft = !use_fft;
-            ESP_LOGI(TAG, "FFT state = %s", use_fft ? "on" : "off");
-            break;
+            case TOUCH_SWIPE_RIGHT:
+                curflame = change_flame(curflame + 1);
+                break;
 
-        default:
-            break;
+            case TOUCH_SWIPE_LEFT:
+                fill_lut_buffer((curpal + 1) % numluts);
+                break;
+
+            case TOUCH_SWIPE_UP:
+                curdisplay = change_display((curdisplay + 1) % numdisplays);
+                break;
+
+            case TOUCH_SWIPE_DOWN:
+                if (nrtrans > 0)
+                    translate_idx = (translate_idx + 1) % (nrtrans + 1);
+                break;
+
+            case TOUCH_LONG_PRESS: {
+                // Lock everything — user configures per-axis locks from here.
+                locked = 1;
+                set_all_axis_locks(1);
+                static const char *pal_names[] = {
+                    "Royal Purple","Fire","Ocean","Acid","Sunset",
+                    "Neon","Rainbow","Fire Storm","Volcano"
+                };
+                static const char *trans_names[] = {
+                    "None","Swirl","Tunnel","Fisheye","Ripple","Moles",
+                    "Downspiral","HalfWheel"
+                };
+                int tidx = ct_clamp(translate_idx, 0, 7);
+                ESP_LOGI(TAG, "LOCKED: flame=%d(%s) wave=%d(%s) disp=%d(%s) "
+                         "pal=%d(%s) trans=%d(%s) fft=%d palcyc=%d align=%d "
+                         "boom=%d tblclr=%d scale=%d",
+                         curflame,      flamearray[curflame].name,
+                         usewave,       wavearray[usewave].name,
+                         curdisplay,    disparray[curdisplay].name,
+                         curpal,        curpal < 9 ? pal_names[curpal] : "?",
+                         translate_idx, trans_names[tidx],
+                         use_fft, use_pal_cycle, use_alignment,
+                         boom_boxes_active, boom_table_color, boom_scale);
+                break;
+            }
+
+            case TOUCH_DOUBLE_TAP:
+                randomize_all();
+                break;
+
+            case TOUCH_TWO_FINGER_TAP:
+                boom_boxes_active = !boom_boxes_active;
+                break;
+
+            case TOUCH_THREE_FINGER_TAP:
+                use_fft = !use_fft;
+                ESP_LOGI(TAG, "FFT %s", use_fft ? "on" : "off");
+                break;
+
+            default:
+                break;
+        }
     }
 }
 
