@@ -364,8 +364,10 @@ static void render_task(void *arg)
         display_effect();
 
         // Blank screen detection — log the active effect combination after 60 consecutive
-        // frames where the max pixel index in buff is below the darkness threshold.
-        // Threshold of 10 catches buffers collapsed to zero/near-zero palette indices.
+        // frames where the max pixel index in buff is below the darkness threshold,
+        // BUT ONLY when audio is present (quiet < 60). Silence naturally fades the buffer
+        // to black; that's expected and not a render issue. Only log when audio was
+        // present within the last second so the log reflects genuine rendering problems.
         {
             static const char *pal_names[] = {
                 "Royal Purple","Fire","Ocean","Acid","Sunset",
@@ -383,11 +385,11 @@ static void render_task(void *arg)
 
             if (max_px < 10) {
                 blank_frames++;
-                if (blank_frames == 60) {
+                if (blank_frames == 60 && quiet < 60) {
                     int tidx = ct_clamp(translate_idx, 0, 7);
-                    ESP_LOGW(TAG, "BLANK %d frames: flame=%d(%s) wave=%d(%s) "
+                    ESP_LOGW(TAG, "BLANK %d frames (quiet=%d): flame=%d(%s) wave=%d(%s) "
                              "disp=%d(%s) pal=%d(%s) trans=%d(%s) fft=%d palcyc=%d align=%d",
-                             blank_frames,
+                             blank_frames, quiet,
                              curflame,      flamearray[curflame].name,
                              usewave,       wavearray[usewave].name,
                              curdisplay,    disparray[curdisplay].name,
