@@ -555,6 +555,81 @@ static void wave_test(void)
     }
 }
 
+// Moles Fractal — two particles steered by audio first-derivative (half-steps).
+// Each frame processes 119 sample pairs; x and y positions shift by half the
+// change between adjacent samples, scattering colored pixels anywhere in the
+// buffer. Left and right channels drive independent particles; right channel's
+// y-axis is mirrored so the two trails move in complementary directions.
+// Port of molesFract() from Cthugha v5.3 via cthugha-js.
+static void wave_moles1(void)
+{
+    static int xoff0 = BUFF_WIDTH  / 2, yoff0 = BUFF_HEIGHT / 2;
+    static int xoff1 = BUFF_WIDTH  / 2, yoff1 = BUFF_HEIGHT / 2;
+    int temp;
+
+    temp = stereo[0][0];
+    for (int x = 0; x < (int)BUFF_WIDTH - 2; x += 2) {
+        xoff0 += (stereo[x    ][0] - temp) >> 1;  temp = stereo[x    ][0];
+        if (xoff0 < 0) xoff0 += BUFF_WIDTH;
+        xoff0 %= BUFF_WIDTH;
+        buff[yoff0 * BUFF_WIDTH + xoff0] = table[curtable][temp & 0xFF];
+
+        yoff0 += (stereo[x + 1][0] - temp) >> 1;  temp = stereo[x + 1][0];
+        if (yoff0 < 0) yoff0 += BUFF_HEIGHT;
+        yoff0 %= BUFF_HEIGHT;
+        buff[yoff0 * BUFF_WIDTH + xoff0] = table[curtable][temp & 0xFF];
+    }
+
+    temp = stereo[0][1];
+    for (int x = 0; x < (int)BUFF_WIDTH - 2; x += 2) {
+        xoff1 += (stereo[x    ][1] - temp) >> 1;  temp = stereo[x    ][1];
+        if (xoff1 < 0) xoff1 += BUFF_WIDTH;
+        xoff1 %= BUFF_WIDTH;
+        buff[yoff1 * BUFF_WIDTH + xoff1] = table[curtable][temp & 0xFF];
+
+        yoff1 -= (stereo[x + 1][1] - temp) >> 1;  temp = stereo[x + 1][1];
+        if (yoff1 < 0) yoff1 += BUFF_HEIGHT;
+        yoff1 %= BUFF_HEIGHT;
+        buff[yoff1 * BUFF_WIDTH + xoff1] = table[curtable][temp & 0xFF];
+    }
+}
+
+// Moles Fractal 2 — same as wave_moles1 but full derivative steps (no >> 1).
+// 2× more volatile: gentle audio gives tight delicate clusters, transients
+// send the particle flying across the entire buffer in a single frame.
+static void wave_moles2(void)
+{
+    static int xoff0 = BUFF_WIDTH  / 2, yoff0 = BUFF_HEIGHT / 2;
+    static int xoff1 = BUFF_WIDTH  / 2, yoff1 = BUFF_HEIGHT / 2;
+    int temp;
+
+    temp = stereo[0][0];
+    for (int x = 0; x < (int)BUFF_WIDTH - 2; x += 2) {
+        xoff0 += stereo[x    ][0] - temp;  temp = stereo[x    ][0];
+        if (xoff0 < 0) xoff0 += BUFF_WIDTH;
+        xoff0 %= BUFF_WIDTH;
+        buff[yoff0 * BUFF_WIDTH + xoff0] = table[curtable][temp & 0xFF];
+
+        yoff0 += stereo[x + 1][0] - temp;  temp = stereo[x + 1][0];
+        if (yoff0 < 0) yoff0 += BUFF_HEIGHT;
+        yoff0 %= BUFF_HEIGHT;
+        buff[yoff0 * BUFF_WIDTH + xoff0] = table[curtable][temp & 0xFF];
+    }
+
+    temp = stereo[0][1];
+    for (int x = 0; x < (int)BUFF_WIDTH - 2; x += 2) {
+        xoff1 += stereo[x    ][1] - temp;  temp = stereo[x    ][1];
+        if (xoff1 < 0) xoff1 += BUFF_WIDTH;
+        xoff1 %= BUFF_WIDTH;
+        buff[yoff1 * BUFF_WIDTH + xoff1] = table[curtable][temp & 0xFF];
+
+        yoff1 -= stereo[x + 1][1] - temp;  temp = stereo[x + 1][1];
+        if (yoff1 < 0) yoff1 += BUFF_HEIGHT;
+        yoff1 %= BUFF_HEIGHT;
+        buff[yoff1 * BUFF_WIDTH + xoff1] = table[curtable][temp & 0xFF];
+    }
+}
+
 function_opt wavearray[] = {
     { wave_dot_hs,     WHEN_ALWAYS, "Dot HS"      },
     { wave_dot_hl,     WHEN_ALWAYS, "Dot HL"      },
@@ -580,6 +655,8 @@ function_opt wavearray[] = {
     { wave_zippy1,     WHEN_ALWAYS, "Zippy 1"     },
     { wave_zippy2,     WHEN_ALWAYS, "Zippy 2"     },
     { wave_test,       WHEN_ALWAYS, "Zaph Test"   },
+    { wave_moles1,     WHEN_ALWAYS, "Moles 1"     },
+    { wave_moles2,     WHEN_ALWAYS, "Moles 2"     },
     { NULL,            WHEN_NEVER,  "<END>"       }
 };
 
