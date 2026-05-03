@@ -30,6 +30,7 @@ static int16_t raw_samples[BUFF_WIDTH * 2];
 
 int stereo[BUFF_WIDTH][2];
 int minnoise = 2;
+int use_alignment = 1;
 int mic_amplify = 200; // AGC-computed each frame; readable externally for diagnostics
 
 // --- ES7210 ADC codec via new I2C master API ---
@@ -229,6 +230,29 @@ int audio_capture_read(void)
         int16_t r = (i < pairs) ? raw_samples[i * 2 + 1] : 0;
         stereo[i][0] = ct_clamp(128 + (int)l * mic_amplify / 256, 0, 255);
         stereo[i][1] = ct_clamp(128 + (int)r * mic_amplify / 256, 0, 255);
+    }
+
+    // Zero-crossing alignment: optional — disabled gives the "swimming" wave look
+    if (!use_alignment) return 1;
+
+    // Find first upward crossing (prev<128 → curr>=128)
+    // in each channel and rotate the buffer so the display window starts there.
+    // Search limit = BUFF_WIDTH/2 so there are always at least 120 samples after
+    // the crossing — avoids wrapping discontinuities in line-drawing wave effects.
+    static int align_tmp[BUFF_WIDTH];
+    for (int ch = 0; ch < 2; ch++) {
+        int a = 0;
+        int prev = stereo[0][ch];
+        for (int i = 1; i < (int)BUFF_WIDTH / 2; i++) {
+            if (stereo[i][ch] >= 128 && prev < 128) { a = i; break; }
+            prev = stereo[i][ch];
+        }
+        if (a > 0) {
+            for (int i = 0; i < (int)BUFF_WIDTH; i++)
+                align_tmp[i] = stereo[(i + a) % BUFF_WIDTH][ch];
+            for (int i = 0; i < (int)BUFF_WIDTH; i++)
+                stereo[i][ch] = align_tmp[i];
+        }
     }
 
     return 1;

@@ -45,6 +45,9 @@ extern uint8_t LUTbuffer[LUTSIZE];
 extern uint8_t LUTfiles[MAXLUTS][LUTSIZE];
 extern int numluts;
 extern int curpal;
+extern int use_pal_cycle;    // palette rotation active this cycle
+extern int pal_cycle_offset; // current rotation offset (0-255)
+extern int use_alignment;    // zero-crossing alignment for wave effects
 void fill_lut_buffer(int pal);
 void init_palettes(void);
 

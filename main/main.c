@@ -54,8 +54,8 @@ void init_tables(void)
                 case 2: table[j][i] = i;                        break;
                 case 3: table[j][i] = 255 - i;                  break;
                 case 4: table[j][i] = abs(128 - i) + 127;       break;
-                case 5: table[j][i] = 255 - abs(128 - i) + 127; break;
-                case 6: table[j][i] = abs(i - 128) + 127;       break;
+                case 5: table[j][i] = (255 - abs(128 - i) + 127) & 0xFF; break;
+                case 6: table[j][i] = esp_random() & 0xFF;            break;
                 case 7:
                     table[j][i] = (abs(128 - i) < 64) ? 255 : (abs(128 - i) * 4);
                     break;
@@ -139,7 +139,9 @@ static void randomize_all(void)
     curdisplay = change_display(esp_random() % numdisplays);
     if (nrtrans && !(esp_random() % 5))
         translate_idx = esp_random() % nrtrans;
-    use_fft = !(esp_random() % 4); // 25% chance of palette-morph mode
+    use_fft = !(esp_random() % 4);       // 25% chance of palette-morph mode
+    use_pal_cycle = !(esp_random() % 4); // 25% chance of palette rotation
+    use_alignment = !(esp_random() % 2); // 50% chance of zero-crossing alignment
     boom_boxes_randomize();
 }
 
@@ -179,21 +181,24 @@ static void handle_touch(touch_gesture_t gesture)
             if (!locked)
                 randomize_all();
             static const char *pal_names[] = {
-                "Royal Purple","Fire","Ocean","Acid","Sunset","Ice","Rainbow","Hot Metal"
+                "Royal Purple","Fire","Ocean","Acid","Sunset",
+                "Neon","Rainbow","Fire Storm","Volcano"
             };
             static const char *trans_names[] = {
-                "None","Swirl","Tunnel","Fisheye","Ripple"
+                "None","Swirl","Tunnel","Fisheye","Ripple","Moles"
             };
-            int tidx = ct_clamp(translate_idx, 0, 4);
+            int tidx = ct_clamp(translate_idx, 0, 5);
             ESP_LOGI(TAG, "STATE [%s]: flame=%d(%s) wave=%d(%s) disp=%d(%s) "
-                     "pal=%d(%s) trans=%d(%s) fft=%d boom=%d",
+                     "pal=%d(%s) trans=%d(%s) fft=%d palcyc=%d align=%d "
+                     "boom=%d tblclr=%d scale=%d",
                      locked ? "LOCKED" : "unlocked",
                      curflame,      flamearray[curflame].name,
                      usewave,       wavearray[usewave].name,
                      curdisplay,    disparray[curdisplay].name,
-                     curpal,        curpal < 8 ? pal_names[curpal] : "?",
+                     curpal,        curpal < 9 ? pal_names[curpal] : "?",
                      translate_idx, trans_names[tidx],
-                     use_fft, boom_boxes_active);
+                     use_fft, use_pal_cycle, use_alignment,
+                     boom_boxes_active, boom_table_color, boom_scale);
             break;
         }
 
@@ -282,10 +287,11 @@ static void render_task(void *arg)
         // Threshold of 10 catches buffers collapsed to zero/near-zero palette indices.
         {
             static const char *pal_names[] = {
-                "Royal Purple","Fire","Ocean","Acid","Sunset","Ice","Rainbow","Hot Metal"
+                "Royal Purple","Fire","Ocean","Acid","Sunset",
+                "Neon","Rainbow","Fire Storm","Volcano"
             };
             static const char *trans_names[] = {
-                "None","Swirl","Tunnel","Fisheye","Ripple"
+                "None","Swirl","Tunnel","Fisheye","Ripple","Moles"
             };
             static int blank_frames = 0;
             static bool was_blank = false;
@@ -296,16 +302,16 @@ static void render_task(void *arg)
             if (max_px < 10) {
                 blank_frames++;
                 if (blank_frames == 60) {
-                    int tidx = ct_clamp(translate_idx, 0, 4);
+                    int tidx = ct_clamp(translate_idx, 0, 5);
                     ESP_LOGW(TAG, "BLANK %d frames: flame=%d(%s) wave=%d(%s) "
-                             "disp=%d(%s) pal=%d(%s) trans=%d(%s) fft=%d",
+                             "disp=%d(%s) pal=%d(%s) trans=%d(%s) fft=%d palcyc=%d align=%d",
                              blank_frames,
                              curflame,      flamearray[curflame].name,
                              usewave,       wavearray[usewave].name,
                              curdisplay,    disparray[curdisplay].name,
-                             curpal,        curpal < 8 ? pal_names[curpal] : "?",
+                             curpal,        curpal < 9 ? pal_names[curpal] : "?",
                              translate_idx, trans_names[tidx],
-                             use_fft);
+                             use_fft, use_pal_cycle, use_alignment);
                     was_blank = true;
                 }
             } else {

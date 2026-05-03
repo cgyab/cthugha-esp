@@ -14,6 +14,8 @@ typedef struct {
 
 extern BoomBox boom_boxes[NUM_BOOM_BOXES];
 extern int boom_boxes_active;
+extern int boom_table_color; // 0=direct palette index, 1=map color through curtable
+extern int boom_scale;       // size multiplier: 1, 2, or 3
 
 void boom_boxes_init(void);
 void boom_box_reset(BoomBox *b, int start_x, int start_y);

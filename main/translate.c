@@ -82,6 +82,49 @@ static void gen_fisheye(uint16_t *map)
     }
 }
 
+// Dual-vortex effect ported from Cthugha v5.3 molestab.c (via cthugha-js).
+// Two counter-rotating spiral centers: left at (W/4, H/2), right at (3W/4, H/2).
+// Each half of the image spirals toward/away from its local center.
+static void gen_moles(uint16_t *map, float delta_r, float delta_a)
+{
+    int cy       = BUFF_HEIGHT / 2;
+    int cx_left  = BUFF_WIDTH  / 4;
+    int cx_right = 3 * BUFF_WIDTH / 4;
+
+    for (int y = 0; y < (int)BUFF_HEIGHT; y++) {
+        for (int x = 0; x < (int)BUFF_WIDTH; x++) {
+            int map_x, map_y;
+
+            if ((x == cx_left && y == cy) || (x == cx_right && y == cy)) {
+                map_x = 0;
+                map_y = 0;
+            } else {
+                int cent_x = (x > (int)BUFF_WIDTH / 2) ? cx_right : cx_left;
+
+                float polar_r = sqrtf((float)((x - cent_x) * (x - cent_x) +
+                                              (y - cy)     * (y - cy)));
+                float polar_a = atan2f((float)(x - cent_x), (float)(y - cy));
+
+                polar_r += delta_r;
+                if (polar_r < 0.0f) polar_r = 0.0f;
+
+                polar_a += (x > (int)BUFF_WIDTH / 2) ? delta_a : -delta_a;
+
+                map_x = (int)roundf(polar_r * sinf(polar_a)) + cent_x;
+                map_y = (int)roundf(polar_r * cosf(polar_a)) + cy;
+
+                if (map_y < 0 || map_y >= (int)BUFF_HEIGHT ||
+                    map_x < 0 || map_x >= (int)BUFF_WIDTH) {
+                    map_x = 0;
+                    map_y = 0;
+                }
+            }
+
+            map[y * BUFF_WIDTH + x] = (uint16_t)(map_y * BUFF_WIDTH + map_x);
+        }
+    }
+}
+
 static void gen_ripple(uint16_t *map)
 {
     int cx = BUFF_WIDTH / 2;
@@ -109,7 +152,7 @@ void init_translate(void)
         trans_maps[i] = NULL;
 
     // Allocate and generate built-in maps
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 5; i++) {
         trans_maps[i] = (uint16_t *)malloc(BUFF_SIZE * sizeof(uint16_t));
         if (!trans_maps[i]) break;
         nrtrans++;
@@ -119,6 +162,7 @@ void init_translate(void)
     if (nrtrans >= 2) gen_tunnel(trans_maps[1]);
     if (nrtrans >= 3) gen_fisheye(trans_maps[2]);
     if (nrtrans >= 4) gen_ripple(trans_maps[3]);
+    if (nrtrans >= 5) gen_moles(trans_maps[4], 2.0f, 0.1f);
 
     translate_idx = 0;
 }

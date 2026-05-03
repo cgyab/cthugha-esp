@@ -14,6 +14,8 @@
 
 BoomBox boom_boxes[NUM_BOOM_BOXES];
 int boom_boxes_active = 0;
+int boom_table_color  = 0;
+int boom_scale        = 1;
 
 void boom_box_reset(BoomBox *b, int start_x, int start_y)
 {
@@ -49,15 +51,16 @@ void boom_boxes_randomize(void)
             boom_box_reset(&boom_boxes[0], BUFF_WIDTH / 2 - 20, BUFF_HEIGHT / 2);
             boom_box_reset(&boom_boxes[1], BUFF_WIDTH / 2 + 20, BUFF_HEIGHT / 2);
         }
+        boom_table_color = esp_random() & 1;          // 50% chance
+        boom_scale       = 1 + (int)(esp_random() % 3); // 1×, 2×, or 3×
     }
 }
 
 static void boom_box_update(BoomBox *b, int loudness)
 {
-    // Scale size 1-6 based on audio peak amplitude (0-128 range from stereo[])
-    b->size = 1 + loudness * 5 / 128;
-    if (b->size < 1) b->size = 1;
-    if (b->size > 6) b->size = 6;
+    // Base size 1-6 from audio, multiplied by boom_scale (1, 2, or 3)
+    b->size = boom_scale * (1 + loudness * 5 / 128);
+    b->size = ct_clamp(b->size, boom_scale, boom_scale * 6);
 
     // Move
     b->x += b->vx;
@@ -79,9 +82,15 @@ static void boom_box_update(BoomBox *b, int loudness)
         b->vy = -b->vy;
     }
 
-    // Cycle color, stay off black (index 0)
+    // Cycle color counter, stay off black
     b->color = (b->color + b->color_inc) % 256;
     if (b->color == 0) b->color = 1;
+
+    // Resolve actual palette index: direct or through the current wave table
+    uint8_t paint = boom_table_color
+                    ? (uint8_t)table[curtable][b->color]
+                    : (uint8_t)b->color;
+    if (paint == 0) paint = 1;
 
     // Paint box into framebuffer
     for (int dy = -b->size; dy <= b->size; dy++) {
@@ -90,7 +99,7 @@ static void boom_box_update(BoomBox *b, int loudness)
         for (int dx = -b->size; dx <= b->size; dx++) {
             int px = b->x + dx;
             if (px < 0 || px >= (int)BUFF_WIDTH) continue;
-            buff[py * BUFF_WIDTH + px] = (uint8_t)b->color;
+            buff[py * BUFF_WIDTH + px] = paint;
         }
     }
 }

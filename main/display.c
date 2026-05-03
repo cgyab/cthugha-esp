@@ -40,13 +40,24 @@ static inline uint16_t rgb888_to_rgb565(uint8_t r, uint8_t g, uint8_t b)
            ((uint16_t)(b >> 3));
 }
 
+// JS reference: cycleSpeed=5 @ 30fps → 6 entries/sec → full 256-cycle in ~43s.
+// At 60fps: advance 1 entry every 10 frames to match the same wall-clock rate.
+#define PAL_CYCLE_FRAMES 10
+
 static void update_palette_lut(void)
 {
     for (int i = 0; i < 256; i++) {
-        uint8_t r = LUTbuffer[i * 3 + 0];
-        uint8_t g = LUTbuffer[i * 3 + 1];
-        uint8_t b = LUTbuffer[i * 3 + 2];
-        pal_lut[i] = rgb888_to_rgb565(r, g, b);
+        int idx = use_pal_cycle ? (i + pal_cycle_offset) & 0xFF : i;
+        pal_lut[i] = rgb888_to_rgb565(LUTbuffer[idx * 3 + 0],
+                                      LUTbuffer[idx * 3 + 1],
+                                      LUTbuffer[idx * 3 + 2]);
+    }
+    if (use_pal_cycle) {
+        static int cycle_counter = 0;
+        if (++cycle_counter >= PAL_CYCLE_FRAMES) {
+            cycle_counter = 0;
+            pal_cycle_offset = (pal_cycle_offset + 1) & 0xFF;
+        }
     }
 }
 
@@ -57,6 +68,20 @@ int curdisplay = 0;
 
 static void display_upwards(void)
 {
+}
+
+// Scroll entire buffer up one row per frame — content flows upward
+static void display_shift_up(void)
+{
+    memmove(buff, buff + BUFF_WIDTH, (BUFF_HEIGHT - 1) * BUFF_WIDTH);
+    memset(buff + (BUFF_HEIGHT - 1) * BUFF_WIDTH, 0, BUFF_WIDTH);
+}
+
+// Scroll entire buffer down one row per frame — content flows downward
+static void display_shift_down(void)
+{
+    memmove(buff + BUFF_WIDTH, buff, (BUFF_HEIGHT - 1) * BUFF_WIDTH);
+    memset(buff, 0, BUFF_WIDTH);
 }
 
 static void display_downwards(void)
@@ -150,6 +175,8 @@ static void display_rot90_kaleidoscope(void)
 
 function_opt disparray[] = {
     { display_upwards,           WHEN_ALWAYS, "Upwards"             },
+    { display_shift_up,          WHEN_ALWAYS, "Shift Up"            },
+    { display_shift_down,        WHEN_ALWAYS, "Shift Down"          },
     { display_downwards,         WHEN_ALWAYS, "Downwards"           },
     { display_hor_split_out,     WHEN_ALWAYS, "Hor. Split out"      },
     { display_hor_split_in,      WHEN_ALWAYS, "Hor. Split in"       },
