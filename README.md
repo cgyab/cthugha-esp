@@ -26,6 +26,7 @@ MIPI-DSI touchscreen at ~60 fps.
 | Double tap | Randomize all effects |
 | Two-finger tap | Toggle boom boxes on/off |
 | Three-finger tap | Toggle pseudo-FFT palette morph on/off |
+| Four-finger tap | **Home** — canonical Cthugha preset + lock |
 | Long press | **Lock** — freeze current combo and enter lock-config mode |
 
 ### Locked mode
@@ -44,9 +45,14 @@ continues to change.
 | Swipe down | Translate lock |
 | Two-finger tap | Boom box lock |
 | Three-finger tap | Toggle FFT (same as unlocked) |
+| Four-finger tap | **Home** — canonical Cthugha preset + lock (same as unlocked) |
 | Double tap | **Nuclear** — clear all locks + full randomize |
 | Long press (all axes locked) | **Unlock all** + full randomize |
 | Long press (some axes unlocked) | **Resume** — restart auto-timer respecting current locks |
+
+**Four-finger tap** returns to the canonical Cthugha preset from anywhere
+(Up Slow flame, Line HS wave, Fire palette, no transforms) and locks it —
+a known-good starting point you can always return to.
 
 **Typical workflow:**
 1. A great palette appears → **long press** to freeze everything

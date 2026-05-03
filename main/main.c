@@ -277,6 +277,24 @@ static void handle_touch(touch_gesture_t gesture)
                 ESP_LOGI(TAG, "FFT %s", use_fft ? "on" : "off");
                 break;
 
+            case TOUCH_FOUR_FINGER_TAP:
+                // Canonical Cthugha: upward fire with stereo oscilloscope lines.
+                // Locks everything so the classic combo stays until long-pressed.
+                curflame     = change_flame(3);   // Up Slow
+                change_wave(5);                   // Line HS
+                curdisplay   = change_display(0); // Upwards (no transform)
+                translate_idx = 0;                // None
+                fill_lut_buffer(1);               // Fire palette
+                curtable     = 0;                 // V-shape table
+                use_fft      = 0;
+                use_pal_cycle = 0;
+                use_alignment = 1;
+                boom_boxes_active = 0;
+                locked = 1;
+                set_all_axis_locks(1);
+                ESP_LOGI(TAG, "HOME: canonical Cthugha locked");
+                break;
+
             default:
                 break;
         }
