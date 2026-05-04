@@ -631,6 +631,77 @@ static void wave_moles2(void)
     }
 }
 
+// Raindrops — expanding ring impulses at random positions.
+// Each drop seeds a Bresenham circle into the buffer; the flame engine
+// propagates those rings as expanding glowing halos. Spawn rate scales
+// with audio energy: sparse in silence, dense when loud.
+#define RAIN_DROPS  8
+#define RAIN_RADIUS 60
+static void wave_raindrops(void)
+{
+    static struct { int cx, cy, r, active; } drops[RAIN_DROPS];
+    static int       rain_frame = 0;
+    static uint32_t  rain_rng   = 0x1337BEEF;
+
+    rain_frame++;
+
+    int energy = 0;
+    for (int x = 0; x < (int)BUFF_WIDTH; x++)
+        energy += abs(stereo[x][0] - 128) + abs(stereo[x][1] - 128);
+    energy /= (2 * (int)BUFF_WIDTH);  // 0..128
+
+    // xorshift32 folded with audio so positions are audio-influenced
+    rain_rng += (uint32_t)stereo[rain_frame % BUFF_WIDTH][0];
+    rain_rng ^= rain_rng << 13;
+    rain_rng ^= rain_rng >> 17;
+    rain_rng ^= rain_rng << 5;
+
+    // spawn interval: 20 frames at silence → 4 frames at loud
+    int interval = 20 - (energy >> 3);
+    if (interval < 4) interval = 4;
+
+    if ((rain_frame % interval) == 0) {
+        for (int i = 0; i < RAIN_DROPS; i++) {
+            if (!drops[i].active) {
+                drops[i].cx     = (int)(rain_rng % BUFF_WIDTH);
+                drops[i].cy     = (int)((rain_rng >> 8) % BUFF_HEIGHT);
+                drops[i].r      = 1;
+                drops[i].active = 1;
+                break;
+            }
+        }
+    }
+
+    for (int i = 0; i < RAIN_DROPS; i++) {
+        if (!drops[i].active) continue;
+
+        int ax = drops[i].cx % BUFF_WIDTH;
+        uint8_t color = table[curtable][(stereo[ax][0] | 0x80) & 0xFF];
+
+        int cx = drops[i].cx, cy = drops[i].cy, r = drops[i].r;
+        int bx = r, by = 0, bd = 1 - r;
+        #define RPLOT(px, py) do { \
+            int _x = (px), _y = (py); \
+            if (_x >= 0 && _x < (int)BUFF_WIDTH && _y >= 0 && _y < (int)BUFF_HEIGHT) \
+                buff[_y * BUFF_WIDTH + _x] = color; \
+        } while (0)
+        while (bx >= by) {
+            RPLOT(cx+bx, cy+by); RPLOT(cx+by, cy+bx);
+            RPLOT(cx-by, cy+bx); RPLOT(cx-bx, cy+by);
+            RPLOT(cx-bx, cy-by); RPLOT(cx-by, cy-bx);
+            RPLOT(cx+by, cy-bx); RPLOT(cx+bx, cy-by);
+            by++;
+            if (bd < 0) { bd += 2*by + 1; }
+            else        { bx--; bd += 2*(by-bx) + 1; }
+        }
+        #undef RPLOT
+
+        drops[i].r++;
+        if (drops[i].r > RAIN_RADIUS)
+            drops[i].active = 0;
+    }
+}
+
 function_opt wavearray[] = {
     { wave_dot_hs,     WHEN_ALWAYS, "Dot HS"      },
     { wave_dot_hl,     WHEN_ALWAYS, "Dot HL"      },
@@ -658,6 +729,7 @@ function_opt wavearray[] = {
     { wave_test,       WHEN_ALWAYS, "Zaph Test"   },
     { wave_moles1,     WHEN_ALWAYS, "Moles 1"     },
     { wave_moles2,     WHEN_ALWAYS, "Moles 2"     },
+    { wave_raindrops,  WHEN_ALWAYS, "Raindrops"   },
     { NULL,            WHEN_NEVER,  "<END>"       }
 };
 
