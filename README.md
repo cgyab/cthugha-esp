@@ -67,12 +67,12 @@ and the per-axis lock vector after every locked-mode gesture.
 
 ## Effects
 
-**Total distinct combinations: ~326 million**
+**Total distinct combinations: ~339 million**
 
-15 flames × 27 waves × 10 display modes × 8 translate states × 9 palettes ×
+15 flames × 28 waves × 10 display modes × 8 translate states × 9 palettes ×
 10 wave tables × 2 (FFT) × 4 (palette cycle off/slow/medium/fast) ×
 2 (alignment) × 7 (boom off, or on × 2 color modes × 3 scales)
-= **326,592,000**
+= **339,148,800**
 
 The auto-randomizer changes the full combination every 3–16 seconds.
 Touch gestures cycle each numbered axis independently.
@@ -87,7 +87,7 @@ Touch gestures cycle each numbered axis independently.
 | 3 | Up Slow | 8 | Right Fast | 13 | Zzz |
 | 4 | Up Subtle | 9 | Water | 14 | Fade |
 
-### Waves (27) — `wave=N`
+### Waves (28) — `wave=N`
 
 | # | Name | # | Name | # | Name |
 |---|------|---|------|---|------|
@@ -100,6 +100,7 @@ Touch gestures cycle each numbered axis independently.
 | 6 | Line HL | 15 | Lightning 1 | 24 | Moles 1 |
 | 7 | Dot VL | 16 | Lightning 2 | 25 | Moles 2 |
 | 8 | Spike | 17 | Dot VS | 26 | Raindrops |
+| | | | | 27 | Claude |
 
 **Wave 10 — Falling:** two audio scan lines drift through the full
 240-row buffer at ~15 rows/second, painting colored pixels over flame
@@ -120,6 +121,16 @@ simultaneous rings, each growing 1 px/frame and retiring at radius 60
 (~1 s lifetime). Spawn rate scales with audio energy: ~3 drops/s at
 silence, ~15 drops/s at loud. Drop positions are pseudorandom, stirred by
 incoming audio samples each frame.
+
+**Wave 27 — Claude:** Lorenz strange attractor with audio-modulated chaos
+parameter. Integrates the Lorenz system 40 steps/frame (σ=10, β=8/3),
+seeding one pixel per step. Quiet audio holds ρ≈28 — the classic
+butterfly: two lobes the system orbits and occasionally flips between.
+Loud audio pushes ρ toward 50, destabilizing the attractor; lobes merge,
+the trace sprawls across more of the buffer, and at peak levels it goes
+fully chaotic. The z coordinate maps to the color table so hue shifts as
+the system moves through the attractor's altitude. The flame turns the
+particle trail into glowing incandescent plasma.
 
 ### Display Modes (10) — `disp=N`
 
@@ -333,7 +344,7 @@ cthugha_esp/
     ├── cthugha.h               # Core types, buffer constants, shared externs
     ├── main.c                  # Render loop, randomizer, per-axis locks, touch
     ├── flames.c                # 15 flame effects (ported from x86 ASM)
-    ├── waves.c                 # 27 wave renderers (ported from MODES.C + PETE.C)
+    ├── waves.c                 # 28 wave renderers (ported from MODES.C + PETE.C)
     ├── palettes.c/h            # 9 palettes (procedural + original v5.3 .MAP)
     ├── translate.c             # 7 spatial remap effects (procedural generation)
     ├── display.c/h             # ST7703 MIPI-DSI driver, 10 display modes, 3× scale

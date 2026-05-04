@@ -702,6 +702,42 @@ static void wave_raindrops(void)
     }
 }
 
+// Claude — Lorenz strange attractor, audio-modulated chaos parameter.
+// Integrates the Lorenz system 40 steps/frame; each step seeds one pixel.
+// Quiet audio → ρ≈28 (classic butterfly, two stable lobes that the system
+// orbits and occasionally flips between). Loud audio pushes ρ toward 50,
+// destabilizing the attractor: lobes merge, the trace fills more of the
+// buffer, and at peak levels it goes fully chaotic.
+// z coordinate maps to the color table so hue shifts as the system orbits.
+static void wave_claude(void)
+{
+    static float lx = 0.1f, ly = 0.0f, lz = 0.0f;
+
+    const float sigma = 10.0f;
+    const float beta  = 2.667f;
+    const float dt    = 0.01f;
+
+    int energy = 0;
+    for (int x = 0; x < (int)BUFF_WIDTH; x++)
+        energy += abs(stereo[x][0] - 128) + abs(stereo[x][1] - 128);
+    energy /= (2 * (int)BUFF_WIDTH);
+
+    float rho = 28.0f + (float)energy * (22.0f / 128.0f);
+
+    for (int step = 0; step < 40; step++) {
+        float dx = sigma * (ly - lx);
+        float dy = lx * (rho - lz) - ly;
+        float dz = lx * ly - beta * lz;
+        lx += dx * dt;
+        ly += dy * dt;
+        lz += dz * dt;
+
+        int px = ct_clamp((int)(lx * 4.0f) + BUFF_WIDTH  / 2, 0, BUFF_WIDTH  - 1);
+        int py = ct_clamp((int)(ly * 3.5f) + BUFF_HEIGHT / 2, 0, BUFF_HEIGHT - 1);
+        buff[py * BUFF_WIDTH + px] = table[curtable][(uint8_t)(lz * 5.0f)];
+    }
+}
+
 function_opt wavearray[] = {
     { wave_dot_hs,     WHEN_ALWAYS, "Dot HS"      },
     { wave_dot_hl,     WHEN_ALWAYS, "Dot HL"      },
@@ -730,6 +766,7 @@ function_opt wavearray[] = {
     { wave_moles1,     WHEN_ALWAYS, "Moles 1"     },
     { wave_moles2,     WHEN_ALWAYS, "Moles 2"     },
     { wave_raindrops,  WHEN_ALWAYS, "Raindrops"   },
+    { wave_claude,     WHEN_ALWAYS, "Claude"      },
     { NULL,            WHEN_NEVER,  "<END>"       }
 };
 
