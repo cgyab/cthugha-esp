@@ -83,24 +83,22 @@ touch_gesture_t touch_input_poll(void)
 
     esp_lcd_touch_read_data(touch_handle);
 
-    uint16_t x[5], y[5];
-    uint16_t strength[5];
+    esp_lcd_touch_point_data_t pts[5];
     uint8_t count = 0;
-    bool pressed = esp_lcd_touch_get_coordinates(touch_handle,
-                                                  x, y, strength, &count, 5);
+    bool pressed = (esp_lcd_touch_get_data(touch_handle, pts, &count, 5) == ESP_OK) && (count > 0);
 
     touch_gesture_t gesture = TOUCH_NONE;
 
     if (pressed && count > 0) {
         if (!was_pressed) {
-            start_x = x[0];
-            start_y = y[0];
+            start_x = pts[0].x;
+            start_y = pts[0].y;
             press_start = xTaskGetTickCount();
             max_fingers = 0;
         }
         if (count > max_fingers) max_fingers = count;
-        last_x = x[0];
-        last_y = y[0];
+        last_x = pts[0].x;
+        last_y = pts[0].y;
         was_pressed = true;
     } else if (was_pressed) {
         // Released — multi-finger taps take priority over single-finger gestures

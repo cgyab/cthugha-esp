@@ -13,7 +13,6 @@ int nrtrans = 0;
 int translate_idx = 0;
 
 static uint16_t *trans_maps[MAXTRANS];
-static int current_loaded = -1;
 
 // Built-in procedural translation maps
 static void gen_swirl(uint16_t *map, float strength)

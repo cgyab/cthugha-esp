@@ -31,12 +31,12 @@ static void flame_upslow(void)
     for (unsigned int y = 0; y < BUFF_HEIGHT - 1; y++) {
         uint8_t *dst = buff + y * BUFF_WIDTH;
         uint8_t *src = buff + (y + 1) * BUFF_WIDTH;
-        unsigned int prev = src[-1 < 0 ? 0 : 0]; // handle x=0 edge
+        uint8_t *src2 = buff + (y + 2) * BUFF_WIDTH;
         for (unsigned int x = 0; x < BUFF_WIDTH; x++) {
-            unsigned int left  = (x > 0) ? buff[(y+1) * BUFF_WIDTH + x - 1] : 0;
-            unsigned int center = buff[(y+1) * BUFF_WIDTH + x];
-            unsigned int right = (x < BUFF_WIDTH - 1) ? buff[(y+1) * BUFF_WIDTH + x + 1] : 0;
-            unsigned int below = (y + 2 < BUFF_HEIGHT) ? buff[(y+2) * BUFF_WIDTH + x] : 0;
+            unsigned int left  = (x > 0) ? src[x - 1] : 0;
+            unsigned int center = src[x];
+            unsigned int right = (x < BUFF_WIDTH - 1) ? src[x + 1] : 0;
+            unsigned int below = (y + 2 < BUFF_HEIGHT) ? src2[x] : 0;
             dst[x] = divsub[left + center + right + below];
         }
     }
