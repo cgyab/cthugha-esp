@@ -158,6 +158,28 @@ static void apply_wave_constraints(void)
         translate_idx = 0;  // no spatial warps — they distort the logo
 }
 
+static void randomize_full(void)
+{
+    static const int speeds[] = {5, 10, 20};
+    if (!lock_flame)   curflame = change_flame(esp_random());
+    if (!lock_wave) {
+        change_wave(esp_random() % numwaves_random);
+        apply_wave_constraints();
+    }
+    if (!lock_palette) fill_lut_buffer(esp_random() % numluts);
+    if (!wave_is_exclusive()) {
+        if (!lock_display) curdisplay = change_display(esp_random() % numdisplays);
+        if (!lock_translate && nrtrans && !(esp_random() % 5))
+            translate_idx = esp_random() % nrtrans;
+    }
+    curtable      = esp_random() % NUMTABLES;
+    use_fft       = !(esp_random() % 4);
+    use_pal_cycle = !(esp_random() % 4);
+    if (use_pal_cycle) pal_cycle_speed = speeds[esp_random() % 3];
+    use_alignment = !(esp_random() % 2);
+    if (!lock_boom) boom_boxes_randomize();
+}
+
 static void randomize_all(void)
 {
     // Tiered randomization — keeps a partial theme alive between full overhauls.
@@ -169,24 +191,7 @@ static void randomize_all(void)
     int roll = (int)(esp_random() % 10);
 
     if (roll < 4) {
-        // Full randomize
-        if (!lock_flame)   curflame = change_flame(esp_random());
-        if (!lock_wave) {
-            change_wave(esp_random() % numwaves_random);
-            apply_wave_constraints();
-        }
-        if (!lock_palette) fill_lut_buffer(esp_random() % numluts);
-        if (!wave_is_exclusive()) {
-            if (!lock_display) curdisplay = change_display(esp_random() % numdisplays);
-            if (!lock_translate && nrtrans && !(esp_random() % 5))
-                translate_idx = esp_random() % nrtrans;
-        }
-        curtable      = esp_random() % NUMTABLES;
-        use_fft       = !(esp_random() % 4);
-        use_pal_cycle = !(esp_random() % 4);
-        if (use_pal_cycle) pal_cycle_speed = speeds[esp_random() % 3];
-        use_alignment = !(esp_random() % 2);
-        if (!lock_boom) boom_boxes_randomize();
+        randomize_full();
 
     } else if (roll < 6) {
         // Color refresh: flame + palette + wave table + pal-cycle
@@ -390,10 +395,13 @@ static void render_task(void *arg)
         // lm_timer: suppresses randomizer during a touch-triggered lm
         //   display; fires randomize_all() when it expires.
         if (startup_hold > 0) {
-            startup_hold--;
+            if (--startup_hold == 0) {
+                randomize_full();
+                count = (esp_random() % rand_time) + min_time;
+            }
         } else if (lm_timer > 0) {
             if (--lm_timer == 0)
-                randomize_all();
+                randomize_full();
         } else if (count <= 0 && !locked) {
             randomize_all();
             count = (esp_random() % rand_time) + min_time;
