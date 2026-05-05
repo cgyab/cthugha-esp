@@ -123,14 +123,18 @@ silence, ~15 drops/s at loud. Drop positions are pseudorandom, stirred by
 incoming audio samples each frame.
 
 **Wave 27 — Claude:** Lorenz strange attractor with audio-modulated chaos
-parameter. Integrates the Lorenz system 40 steps/frame (σ=10, β=8/3),
-seeding one pixel per step. Quiet audio holds ρ≈28 — the classic
-butterfly: two lobes the system orbits and occasionally flips between.
-Loud audio pushes ρ toward 50, destabilizing the attractor; lobes merge,
-the trace sprawls across more of the buffer, and at peak levels it goes
-fully chaotic. The z coordinate maps to the color table so hue shifts as
-the system moves through the attractor's altitude. The flame turns the
-particle trail into glowing incandescent plasma.
+parameter. Integrates the Lorenz system 80 steps/frame (β=8/3), seeding
+one pixel per step. Quiet audio holds ρ≈28 — the classic butterfly: two
+lobes the system orbits and occasionally flips between. Loud audio pushes
+ρ toward 50, destabilizing the attractor into wider, more turbulent traces.
+σ slowly breathes between 7 and 13 on an independent ~30 s LFO, changing
+the wing proportions independently of audio. The viewing angle oscillates
+over a ~22 s cycle, tilting between top-down (classic butterfly silhouette)
+and a side view that reveals the attractor's vertical spine. Loud transients
+kick the trajectory to a new region of the phase space. The z coordinate
+maps to the color table so hue shifts as the system moves through the
+attractor's altitude. The flame turns the particle trail into glowing
+incandescent plasma.
 
 ### Display Modes (10) — `disp=N`
 
@@ -238,11 +242,11 @@ propagates. ~40% chance of being active. When active:
 The rendering pipeline runs as a FreeRTOS task pinned to core 0:
 
 ```
-┌─────────────┐   ┌──────────────┐   ┌──────────┐   ┌───────────┐   ┌─────────┐   ┌─────────────┐
-│  Translate  │──▶│    Flame     │──▶│   Wave   │──▶│  Display  │──▶│  Boom   │──▶│ LCD Output  │
-│ (spatial    │   │ (scroll/blur)│   │ (draw    │   │ (mirror/  │   │  Boxes  │   │ (palette +  │
-│  remap)     │   │              │   │  audio)  │   │  rotate)  │   │ (paint) │   │  3× scale)  │
-└─────────────┘   └──────────────┘   └──────────┘   └───────────┘   └─────────┘   └─────────────┘
+┌─────────────┐   ┌──────────────┐   ┌──────────┐   ┌─────────┐   ┌───────────┐   ┌─────────────┐
+│  Translate  │──▶│    Flame     │──▶│   Wave   │──▶│  Boom   │──▶│  Display  │──▶│ LCD Output  │
+│ (spatial    │   │ (scroll/blur)│   │ (draw    │   │  Boxes  │   │ (mirror/  │   │ (palette +  │
+│  remap)     │   │              │   │  audio)  │   │ (paint) │   │  rotate)  │   │  3× scale)  │
+└─────────────┘   └──────────────┘   └──────────┘   └─────────┘   └───────────┘   └─────────────┘
                         ▲
                   ┌─────┴──────┐
                   │   Audio    │
@@ -344,7 +348,7 @@ cthugha_esp/
     ├── cthugha.h               # Core types, buffer constants, shared externs
     ├── main.c                  # Render loop, randomizer, per-axis locks, touch
     ├── flames.c                # 15 flame effects (ported from x86 ASM)
-    ├── waves.c                 # 28 wave renderers (ported from MODES.C + PETE.C)
+    ├── waves.c                 # 28 wave renderers (26 ported from MODES.C + PETE.C, 2 original)
     ├── palettes.c/h            # 9 palettes (procedural + original v5.3 .MAP)
     ├── translate.c             # 7 spatial remap effects (procedural generation)
     ├── display.c/h             # ST7703 MIPI-DSI driver, 10 display modes, 3× scale

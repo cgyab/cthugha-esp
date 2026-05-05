@@ -83,11 +83,11 @@ touch_gesture_t touch_input_poll(void)
 
     esp_lcd_touch_read_data(touch_handle);
 
-    uint16_t x[4], y[4];
-    uint16_t strength[4];
+    uint16_t x[5], y[5];
+    uint16_t strength[5];
     uint8_t count = 0;
     bool pressed = esp_lcd_touch_get_coordinates(touch_handle,
-                                                  x, y, strength, &count, 4);
+                                                  x, y, strength, &count, 5);
 
     touch_gesture_t gesture = TOUCH_NONE;
 
@@ -109,7 +109,9 @@ touch_gesture_t touch_input_poll(void)
         int dx = last_x - start_x;
         int dy = last_y - start_y;
 
-        if (max_fingers >= 4) {
+        if (max_fingers >= 5) {
+            gesture = TOUCH_FIVE_FINGER_TAP;
+        } else if (max_fingers >= 4) {
             gesture = TOUCH_FOUR_FINGER_TAP;
         } else if (max_fingers == 3) {
             gesture = TOUCH_THREE_FINGER_TAP;

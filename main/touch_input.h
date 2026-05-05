@@ -15,6 +15,7 @@ typedef enum {
     TOUCH_TWO_FINGER_TAP,
     TOUCH_THREE_FINGER_TAP,
     TOUCH_FOUR_FINGER_TAP,
+    TOUCH_FIVE_FINGER_TAP,
 } touch_gesture_t;
 
 void touch_input_init(void);

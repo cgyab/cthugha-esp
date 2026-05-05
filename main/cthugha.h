@@ -62,9 +62,11 @@ int change_flame(int flamenum);
 extern void (*wave)(void);
 extern function_opt wavearray[];
 extern int numwaves;
+extern int numwaves_random; // WHEN_ALWAYS waves only — used by randomizer
 extern int usewave;
 void change_wave(int wavenum);
 void next_wave(void);
+int  wave_is_exclusive(void); // 1 if current wave requires upright display+trans
 
 // --- Display modes ---
 extern void (*display_effect)(void);

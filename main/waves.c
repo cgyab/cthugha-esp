@@ -5,9 +5,11 @@
 //
 
 #include "cthugha.h"
+#include "logo_data.h"
 
 void (*wave)(void);
 int numwaves = -1;
+int numwaves_random = -1; // subset eligible for randomization (WHEN_ALWAYS only)
 int usewave = 0;
 
 int sine_table[BUFF_WIDTH];
@@ -640,7 +642,7 @@ static void wave_moles2(void)
 static void wave_raindrops(void)
 {
     static struct { int cx, cy, r, active; } drops[RAIN_DROPS];
-    static int       rain_frame = 0;
+    static uint32_t  rain_frame = 0;
     static uint32_t  rain_rng   = 0x1337BEEF;
 
     rain_frame++;
@@ -702,6 +704,24 @@ static void wave_raindrops(void)
     }
 }
 
+// lm — startup-only logo pulse (WHEN_NEVER: excluded from randomizer).
+// Re-seeds the 4,082 logo edge pixels every frame at a brightness that tracks
+// audio energy. With flame_fade (no spread) the outline holds exactly where
+// seeded, so the logo glows and pulses cleanly against a black background.
+// Silence → dim glow. Transients → bright flash.
+static void wave_lm(void)
+{
+    int energy = 0;
+    for (int x = 0; x < (int)BUFF_WIDTH; x++)
+        energy += abs(stereo[x][0] - 128) + abs(stereo[x][1] - 128);
+    energy /= (2 * (int)BUFF_WIDTH);  // 0..128
+
+    int edge_idx = 80 + (energy * 160 / 128);
+    uint8_t edge_color = table[curtable][(uint8_t)edge_idx];
+    for (int i = 0; i < LOGO_EDGE_COUNT; i++)
+        buff[logo_edge_y[i] * BUFF_WIDTH + logo_edge_x[i]] = edge_color;
+}
+
 // Claude — Lorenz strange attractor, audio-modulated chaos parameter.
 // Integrates the Lorenz system 40 steps/frame; each step seeds one pixel.
 // Quiet audio → ρ≈28 (classic butterfly, two stable lobes that the system
@@ -711,20 +731,40 @@ static void wave_raindrops(void)
 // z coordinate maps to the color table so hue shifts as the system orbits.
 static void wave_claude(void)
 {
-    static float lx = 0.1f, ly = 0.0f, lz = 0.0f;
-
-    const float sigma = 10.0f;
-    const float beta  = 2.667f;
-    const float dt    = 0.01f;
+    static float lx       = 0.1f, ly = 0.0f, lz = 0.0f;
+    static float tilt     = 0.0f;    // x-axis camera tilt: 0=top-down, ~1.05=side
+    static float tilt_vel = 0.0008f; // sign flips at bounds → slow 22s sweep
+    static float sigma_ph = 0.0f;   // LFO phase for sigma breathing
+    static int   kick_cd  = 0;      // cooldown frames between transient kicks
 
     int energy = 0;
     for (int x = 0; x < (int)BUFF_WIDTH; x++)
         energy += abs(stereo[x][0] - 128) + abs(stereo[x][1] - 128);
     energy /= (2 * (int)BUFF_WIDTH);
 
+    // rho: audio widens the attractor wings (28=classic chaos, 50=turbulent)
     float rho = 28.0f + (float)energy * (22.0f / 128.0f);
+    // sigma: slow ~30s LFO breathes the wing shape independently of audio
+    sigma_ph += 0.003f;
+    if (sigma_ph > 6.2832f) sigma_ph -= 6.2832f;
+    float sigma = 10.0f + 3.0f * sinf(sigma_ph); // 7..13
+    const float beta = 2.667f;
+    const float dt   = 0.01f;
 
-    for (int step = 0; step < 40; step++) {
+    // Slowly oscillate tilt to reveal the 3D butterfly structure from varying angles
+    tilt += tilt_vel;
+    if (tilt > 1.05f || tilt < 0.0f) tilt_vel = -tilt_vel;
+    float cos_t = cosf(tilt), sin_t = sinf(tilt);
+
+    // Kick trajectory on loud transients — jolts to a new attractor region
+    if (kick_cd > 0) kick_cd--;
+    if (energy > 80 && kick_cd == 0) {
+        lx += 2.5f;
+        ly -= 1.8f;
+        kick_cd = 50;
+    }
+
+    for (int step = 0; step < 80; step++) {
         float dx = sigma * (ly - lx);
         float dy = lx * (rho - lz) - ly;
         float dz = lx * ly - beta * lz;
@@ -732,9 +772,13 @@ static void wave_claude(void)
         ly += dy * dt;
         lz += dz * dt;
 
-        int px = ct_clamp((int)(lx * 4.0f) + BUFF_WIDTH  / 2, 0, BUFF_WIDTH  - 1);
-        int py = ct_clamp((int)(ly * 3.5f) + BUFF_HEIGHT / 2, 0, BUFF_HEIGHT - 1);
-        buff[py * BUFF_WIDTH + px] = table[curtable][(uint8_t)(lz * 5.0f)];
+        // Tilt projection: blend y (top-down) with z (side) as tilt oscillates
+        float lz_c  = lz - 27.0f;               // center z around attractor midpoint
+        float proj_y = ly * cos_t + lz_c * sin_t;
+
+        int px = ct_clamp((int)(lx     * 4.0f) + BUFF_WIDTH  / 2, 0, BUFF_WIDTH  - 1);
+        int py = ct_clamp((int)(proj_y * 3.5f) + BUFF_HEIGHT / 2, 0, BUFF_HEIGHT - 1);
+        buff[py * BUFF_WIDTH + px] = table[curtable][(uint8_t)(lz * 4.5f)];
     }
 }
 
@@ -767,15 +811,25 @@ function_opt wavearray[] = {
     { wave_moles2,     WHEN_ALWAYS, "Moles 2"     },
     { wave_raindrops,  WHEN_ALWAYS, "Raindrops"   },
     { wave_claude,     WHEN_ALWAYS, "Claude"      },
+    { wave_lm,   WHEN_NEVER,  "lm"          },
     { NULL,            WHEN_NEVER,  "<END>"       }
 };
+
+int wave_is_exclusive(void)
+{
+    return wave == wave_lm;
+}
 
 void change_wave(int wavenum)
 {
     if (numwaves < 0) {
         numwaves = 0;
-        while (wavearray[numwaves].function != NULL)
+        numwaves_random = 0;
+        while (wavearray[numwaves].function != NULL) {
+            if (wavearray[numwaves].flag_when == WHEN_ALWAYS)
+                numwaves_random++;
             numwaves++;
+        }
     }
     if (numwaves == 0) return;
 
@@ -785,5 +839,5 @@ void change_wave(int wavenum)
 
 void next_wave(void)
 {
-    change_wave((usewave + 1) % numwaves);
+    change_wave((usewave + 1) % numwaves_random);
 }

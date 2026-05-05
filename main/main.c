@@ -55,6 +55,9 @@ static void set_all_axis_locks(int v) {
     lock_flame = lock_wave = lock_palette =
     lock_display = lock_translate = lock_boom = v;
 }
+static int startup_hold   = 900;  // frames to hold lm on boot before randomizer
+static int lm_timer = 0;    // frames remaining in a touch-triggered lm display
+
 static int quiet_change = 1;
 static int was_quiet = 0;
 static int use_fft = 0; // palette-morph mode: blends adjacent palettes by audio rhythm
@@ -148,14 +151,33 @@ static void apply_fft(void)
     // pal_lut[] is rebuilt from LUTbuffer at the start of each display_render()
 }
 
+// Enforce exclusive-wave constraints: when the active wave requires an upright,
+// un-warped buffer, lock display to pass-through (0) and translation to None (0)
+// and enable the logo overlay. Clears the overlay when a normal wave is active.
+static void apply_wave_constraints(void)
+{
+    if (wave_is_exclusive()) {
+        translate_idx = 0;  // no spatial warps — they distort the logo
+        logo_overlay_enabled = 0;
+    } else {
+        logo_overlay_enabled = 0;
+    }
+}
+
 static void randomize_all(void)
 {
     if (!lock_flame)     curflame   = change_flame(esp_random());
-    if (!lock_wave)      change_wave(esp_random() % numwaves);
+    if (!lock_wave) {
+        change_wave(esp_random() % numwaves_random);
+        apply_wave_constraints();
+    }
     if (!lock_palette)   fill_lut_buffer(esp_random() % numluts);
-    if (!lock_display)   curdisplay = change_display(esp_random() % numdisplays);
-    if (!lock_translate && nrtrans && !(esp_random() % 5))
-        translate_idx = esp_random() % nrtrans;
+    // Display and translate are only randomized when the active wave allows it
+    if (!wave_is_exclusive()) {
+        if (!lock_display)   curdisplay = change_display(esp_random() % numdisplays);
+        if (!lock_translate && nrtrans && !(esp_random() % 5))
+            translate_idx = esp_random() % nrtrans;
+    }
 
     // These flags are not per-axis locked — always re-rolled
     curtable      = esp_random() % NUMTABLES;
@@ -205,6 +227,10 @@ static void handle_touch(touch_gesture_t gesture)
                 use_fft = !use_fft;
                 break;
 
+            case TOUCH_FIVE_FINGER_TAP:
+                // Falls through to shared lm handler below.
+                goto lm_trigger;
+
             default: break;
         }
 
@@ -218,7 +244,8 @@ static void handle_touch(touch_gesture_t gesture)
         // Normal unlocked mode: gestures cycle effects.
         switch (gesture) {
             case TOUCH_TAP:
-                next_wave();
+                change_wave((usewave + 1) % numwaves_random);
+                apply_wave_constraints();
                 break;
 
             case TOUCH_SWIPE_RIGHT:
@@ -230,11 +257,12 @@ static void handle_touch(touch_gesture_t gesture)
                 break;
 
             case TOUCH_SWIPE_UP:
-                curdisplay = change_display((curdisplay + 1) % numdisplays);
+                if (!wave_is_exclusive())
+                    curdisplay = change_display((curdisplay + 1) % numdisplays);
                 break;
 
             case TOUCH_SWIPE_DOWN:
-                if (nrtrans > 0)
+                if (!wave_is_exclusive() && nrtrans > 0)
                     translate_idx = (translate_idx + 1) % (nrtrans + 1);
                 break;
 
@@ -282,6 +310,7 @@ static void handle_touch(touch_gesture_t gesture)
                 // Locks everything so the classic combo stays until long-pressed.
                 curflame     = change_flame(3);   // Up Slow
                 change_wave(5);                   // Line HS
+                apply_wave_constraints();
                 curdisplay   = change_display(0); // Upwards (no transform)
                 translate_idx = 0;                // None
                 fill_lut_buffer(1);               // Fire palette
@@ -293,6 +322,22 @@ static void handle_touch(touch_gesture_t gesture)
                 locked = 1;
                 set_all_axis_locks(1);
                 ESP_LOGI(TAG, "HOME: canonical Cthugha locked");
+                break;
+
+            case TOUCH_FIVE_FINGER_TAP:
+            lm_trigger:
+                // lm: show the logo for 15 s then randomize_all().
+                // Works from any state — unlocks, overrides startup hold.
+                locked        = 0;
+                startup_hold  = 0;
+                curflame      = change_flame(4);      // Up Subtle
+                change_wave(28);                      // lm
+                apply_wave_constraints();             // force trans=0
+                curdisplay    = change_display(2);    // Shift Down
+                boom_boxes_randomize();
+                boom_boxes_active = 1;
+                lm_timer = 900;                 // ~15 s @ 60 fps
+                ESP_LOGI(TAG, "lm: 15 s display triggered");
                 break;
 
             default:
@@ -314,15 +359,22 @@ static void render_task(void *arg)
 
     int count = 0;
     int quiet = 0;
-    int frame = 0;
 
     while (1) {
-        // Auto-change timer
-        if (count <= 0 && !locked) {
+        // Auto-change timer.
+        // startup_hold: suppresses randomizer on first boot (~15 s).
+        // lm_timer: suppresses randomizer during a touch-triggered lm
+        //   display; fires randomize_all() when it expires.
+        if (startup_hold > 0) {
+            startup_hold--;
+        } else if (lm_timer > 0) {
+            if (--lm_timer == 0)
+                randomize_all();
+        } else if (count <= 0 && !locked) {
             randomize_all();
             count = (esp_random() % rand_time) + min_time;
         }
-        count--;
+        if (!locked) count--;
 
         // Apply translation if active
         if (translate_idx > 0)
@@ -344,13 +396,15 @@ static void render_task(void *arg)
                 quiet = 0;
             } else if (was_quiet) {
                 was_quiet = 0;
-                count = 0; // trigger change
+                if (startup_hold <= 0) count = 0; // trigger change (not during startup)
             }
             quiet = 0;
         } else {
-            quiet++;
-            // Reseed a row every ~3s of silence so the visualization doesn't fade to black
-            if (quiet % 90 == 0) {
+            if (quiet < 10000) quiet++;
+            // Reseed a row every ~3s of silence so the visualization doesn't fade to black.
+            // Skip during exclusive waves (e.g. lm) — the bottom stripe would
+            // show as an artifact against the black background.
+            if (quiet % 90 == 0 && !wave_is_exclusive()) {
                 uint8_t *seed = buff + (BUFF_BOTTOM - 2) * BUFF_WIDTH;
                 for (int x = 0; x < (int)BUFF_WIDTH; x++)
                     seed[x] = 80 + (uint8_t)(esp_random() & 0x7F);
@@ -385,6 +439,11 @@ static void render_task(void *arg)
 
             if (max_px < 10) {
                 blank_frames++;
+                if (blank_frames == 30 && quiet < 60 && !boom_boxes_active && !wave_is_exclusive()) {
+                    boom_boxes_randomize();
+                    boom_boxes_active = 1;
+                    ESP_LOGI(TAG, "BLANK %d frames: auto-enabled boom boxes", blank_frames);
+                }
                 if (blank_frames == 60 && quiet < 60) {
                     int tidx = ct_clamp(translate_idx, 0, 7);
                     ESP_LOGW(TAG, "BLANK %d frames (quiet=%d): flame=%d(%s) wave=%d(%s) "
@@ -409,10 +468,6 @@ static void render_task(void *arg)
 
         // Scale and send to LCD
         display_render();
-
-        frame++;
-        // if (frame % 120 == 0)
-        //     ESP_LOGI(TAG, "frame %d quiet=%d", frame, quiet);
 
         // Touch input polling
         touch_gesture_t gesture = touch_input_poll();
@@ -445,11 +500,17 @@ void app_main(void)
     init_translate();
     boom_boxes_init();
 
-    // Set initial random modes
-    curflame = change_flame(esp_random());
-    change_wave(esp_random() % 24);
-    curdisplay = change_display(esp_random() % 8);
-    fill_lut_buffer(esp_random() % numluts);
+    // Start in lm mode: logo pulse seeding flame edges.
+    // The randomizer is suppressed for 15 s (900 frames @ ~60 fps) so the
+    // logo runs exclusively on startup. After that normal randomization takes
+    // over and lm becomes one wave in the rotation.
+    curflame   = change_flame(4);        // Up Subtle — gentle upward wisps from edge seeds
+    change_wave(28);                     // lm
+    apply_wave_constraints();            // force trans=0
+    curdisplay = change_display(2);      // Shift Down — drip effect with upward flame
+    fill_lut_buffer(2);                  // Ocean palette — black → deep blue → cyan → white
+    boom_boxes_randomize();
+    boom_boxes_active = 1;               // always on for startup
 
     // Initialize hardware — touch first, audio second (audio shares the I2C bus)
     display_init();

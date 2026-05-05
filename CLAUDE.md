@@ -47,13 +47,12 @@ First build downloads managed components automatically: `waveshare/esp_lcd_st770
 
 Internal framebuffer is 240×240 @ 8-bit indexed color (57,600 bytes), scaled 3× to 720×720 RGB565 for the LCD. Each frame in the render loop (`render_task` in main.c, pinned to core 0):
 
-1. **Flame** (flames.c) — scrolls/blurs the buffer via directional pixel averaging through `divsub[]` lookup table. 15 effects ported from original x86 inline assembly.
-2. **Audio** (audio_capture.c) — reads stereo I2S from ES7210 ADC codec into `stereo[240][2]` as 0–255 normalized samples. MAV-based AGC adjusts gain automatically to room level.
-3. **Wave** (waves.c) — maps audio data onto the buffer as visual patterns. 24 renderers ported from MODES.C and PETE.C.
+1. **Translation** (translate.c) — optional spatial remapping via precomputed uint16_t lookup tables. 7 procedural effects.
+2. **Flame** (flames.c) — scrolls/blurs the buffer via directional pixel averaging through `divsub[]` lookup table. 15 effects ported from original x86 inline assembly.
+3. **Audio + Wave** (audio_capture.c, waves.c) — reads stereo I2S from ES7210 ADC codec into `stereo[240][2]` as 0–255 normalized samples, then maps audio data onto the buffer as visual patterns. 28 randomizable wave renderers.
 4. **Boom Boxes** (boom_box.c) — two colored squares bounce around the buffer seeding pixels that flame propagates. Audio-reactive size. Randomly activated by `randomize_all()`. Novel feature from the JS port; not in original v5.3.
-5. **Translation** (translate.c) — optional spatial remapping via precomputed uint16_t lookup tables. 4 procedural effects (swirl, tunnel, fisheye, ripple).
-6. **Display effect** (display.c) — buffer transforms before output (mirror, rotate, kaleidoscope). 8 modes from DISPLAY.C.
-7. **LCD output** (display.c `display_render()`) — palette lookup into `pal_lut[256]` (RGB565), 3× nearest-neighbor scaling, written directly into DPI panel framebuffer, then `draw_bitmap` to swap buffers on vsync.
+5. **Display effect** (display.c) — buffer transforms before output (mirror, rotate, kaleidoscope). 10 modes from DISPLAY.C.
+6. **LCD output** (display.c `display_render()`) — palette lookup into `pal_lut[256]` (RGB565), 3× nearest-neighbor scaling, written directly into DPI panel framebuffer, then `draw_bitmap` to swap buffers on vsync.
 
 ### Display Driver (display.c)
 
@@ -83,7 +82,7 @@ A **MAV-based AGC** (mean absolute value, not peak) tracks average signal energy
 
 ### Touch Input (touch_input.c)
 
-GT911 capacitive touch over I2C master bus. Gesture detection: tap, double-tap, swipe (L/R/U/D), long press. Gestures mapped to mode changes in `handle_touch()` in main.c.
+GT911 capacitive touch over I2C master bus, up to 5 simultaneous touch points. Gesture detection: tap, swipe (L/R/U/D), long press, two/three/four/five-finger taps. Gestures mapped to mode changes in `handle_touch()` in main.c.
 
 ### Key Data Structures
 
@@ -100,7 +99,26 @@ GT911 capacitive touch over I2C master bus. Gesture detection: tap, double-tap, 
 
 ### Effect Selection
 
-All effects use the `function_opt` struct pattern: array of `{function_ptr, flag, name}` terminated by a NULL entry. Function pointer tables: `flamearray[]`, `wavearray[]`, `disparray[]`. Modes cycle via `change_flame()`, `change_wave()`, `change_display()`. Auto-randomization via timer in the render loop when not locked.
+All effects use the `function_opt` struct pattern: array of `{function_ptr, flag, name}` terminated by a NULL entry. Function pointer tables: `flamearray[]`, `wavearray[]`, `disparray[]`. Modes cycle via `change_flame()`, `change_wave()`, `change_display()`.
+
+Wave entries carry a `flag_when` field: `WHEN_ALWAYS` (eligible for randomizer and tap cycling) or `WHEN_NEVER` (startup/recall only — unreachable by randomizer or tap). `change_wave()` initializes two counts lazily on first call:
+- `numwaves` — total non-null entries in `wavearray[]`
+- `numwaves_random` — count of `WHEN_ALWAYS` entries only
+
+Both `randomize_all()` and the tap cycling handler use `numwaves_random` as the modulus, ensuring `WHEN_NEVER` waves are never accidentally selected.
+
+`wave_is_exclusive()` returns true when the active wave requires the upright full-frame view (no display transforms, no translation). `randomize_all()` and the silence reseeder both check this before touching display/translate state.
+
+### Startup Sequence and Timers
+
+On boot, `app_main` sets a specific startup configuration before starting the render task. Two file-scope counters in the render loop gate the randomizer:
+
+- `startup_hold` — counts down from 900 (~15 s at 60 fps). While positive, the randomizer is suppressed so the startup effect runs uninterrupted.
+- `lm_timer` — set to 900 by the five-finger tap gesture. When it expires, `randomize_all()` fires. Only one of startup_hold/lm_timer is active at a time.
+
+### Blank Screen Recovery
+
+The render loop samples the maximum pixel value in `buff` each frame. If the max stays below 10 for 30 consecutive frames while audio is present and boom boxes are off (and not in an exclusive wave), boom boxes are automatically enabled as a lightweight self-healing step. If the screen remains blank at 60 frames, a `BLANK` warning is logged with the full effect state for diagnostics.
 
 ## Key Constants (cthugha.h)
 
@@ -124,6 +142,9 @@ ESP32-P4 @ 360 MHz, SPIRAM @ 200 MHz, `IDF_EXPERIMENTAL_FEATURES` enabled (requi
 - **sdkconfig v5.5.1 incompatibilities**: `SPIRAM_MODE_QUAD`, `SPIRAM_FETCH_INSTRUCTIONS`, `SPIRAM_RODATA` don't exist on this target/version. CPU max is 360 MHz (not 400).
 - **Two audio codecs, one I2S bus**: ES8311 (0x18) is DAC-only — reading from it yields all zeros. ES7210 (0x40) is the mic ADC. Both share GPIO 7/8 I2C bus with GT911 touch. Must use new I2C master API (`driver/i2c_master.h`) for both; the old `driver/i2c.h` API cannot share the same port.
 - **Touch init must precede audio init**: `audio_capture_init()` calls `touch_get_i2c_bus()` to attach ES7210 to the shared bus. If audio init runs before touch init, the bus handle is NULL and the ES7210 attach will abort.
-- **Translation effects are not ported from original**: The original Cthugha v5.3 loaded precomputed `.tab` binary files (320×200 pixel maps). We have no `.tab` files; the four effects (swirl, tunnel, fisheye, ripple) are procedurally generated from scratch for the 240×240 square buffer.
+- **GT911 max touch points**: The GT911 supports 5 simultaneous points. Arrays and the `max_points` argument to `esp_lcd_touch_get_coordinates()` must be size 5 to detect five-finger gestures; size 4 silently drops the fifth touch.
+- **Translation effects are not ported from original**: The original Cthugha v5.3 loaded precomputed `.tab` binary files (320×200 pixel maps). We have no `.tab` files; all 7 spatial effects are procedurally generated from scratch for the 240×240 square buffer.
 - **Fisheye was barrel distortion**: The original `gen_fisheye` used `nr = r*r` which pulls all content toward the center (dark area) — a barrel distortion. Fixed to `nr = sqrtf(r)` which reads from outer/bottom areas where flame content lives.
 - **90° rotation effects read from wrong half of buffer**: The original port sampled `buff[x*W+y]` for x=0..W/2-1, covering only rows 0–119 (top half, where content is dark/old). Wave seeds rows 236–239 (bottom). Fixed to `buff[(W-1-x)*W+y]` so both halves read from rows 120–239, including the seeded area.
+- **WHEN_NEVER waves reachable via tap cycling if using numwaves**: The tap gesture and `next_wave()` must use `numwaves_random` as the modulus, not `numwaves`. Using `numwaves` allows the index to reach WHEN_NEVER entries at the end of the array.
+- **Long-run integer safety**: Counters that increment or decrement every frame can overflow on multi-month runs. `rain_frame` in `wave_raindrops` must be `uint32_t` (signed overflow → negative → OOB array index crash). The render-loop `count` must only decrement when `!locked` (unbounded decrement when locked → signed overflow UB). The `quiet` counter is capped at 10000 to prevent `quiet % 90` going negative post-overflow.
