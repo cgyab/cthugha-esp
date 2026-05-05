@@ -11,4 +11,3 @@
 void display_init(void);
 void display_render(void);
 
-extern int logo_overlay_enabled; // set 1 to stamp logo outline over every frame

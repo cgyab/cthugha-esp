@@ -152,16 +152,10 @@ static void apply_fft(void)
 }
 
 // Enforce exclusive-wave constraints: when the active wave requires an upright,
-// un-warped buffer, lock display to pass-through (0) and translation to None (0)
-// and enable the logo overlay. Clears the overlay when a normal wave is active.
 static void apply_wave_constraints(void)
 {
-    if (wave_is_exclusive()) {
+    if (wave_is_exclusive())
         translate_idx = 0;  // no spatial warps — they distort the logo
-        logo_overlay_enabled = 0;
-    } else {
-        logo_overlay_enabled = 0;
-    }
 }
 
 static void randomize_all(void)

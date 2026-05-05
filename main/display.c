@@ -4,7 +4,6 @@
 //
 
 #include <string.h>
-#include "logo_data.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -30,7 +29,6 @@ static esp_lcd_panel_io_handle_t mipi_dbi_io = NULL;
 static esp_ldo_channel_handle_t ldo_mipi_phy = NULL;
 static SemaphoreHandle_t refresh_finish = NULL;
 static uint16_t *lcd_fb[2] = {NULL, NULL};
-int logo_overlay_enabled = 0;
 static int cur_fb = 0;
 
 static uint16_t pal_lut[256];
@@ -311,23 +309,6 @@ void display_render(void)
                    dst_row0, LCD_H_RES * sizeof(uint16_t));
     }
 
-    // Logo edge overlay — stamp only outline pixels (not fill) so the fire
-    // animation shows through the interior. Uses a bright palette color so
-    // the outline integrates with whatever palette is active.
-    if (logo_overlay_enabled) {
-        uint16_t outline_color = pal_lut[220];
-        for (int i = 0; i < LOGO_EDGE_COUNT; i++) {
-            int sx = logo_edge_x[i];
-            int sy = logo_edge_y[i];
-            int dx_base = sx * SCALE_FACTOR;
-            int dy_base = sy * SCALE_FACTOR;
-            for (int ry = 0; ry < SCALE_FACTOR; ry++) {
-                uint16_t *row = fb + (dy_base + ry) * LCD_H_RES;
-                for (int rx = 0; rx < SCALE_FACTOR; rx++)
-                    row[dx_base + rx] = outline_color;
-            }
-        }
-    }
 
     // When source is the panel's own framebuffer, draw_bitmap swaps without copying
     esp_lcd_panel_draw_bitmap(panel_handle, 0, 0, LCD_H_RES, LCD_V_RES, fb);
