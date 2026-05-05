@@ -160,30 +160,60 @@ static void apply_wave_constraints(void)
 
 static void randomize_all(void)
 {
-    if (!lock_flame)     curflame   = change_flame(esp_random());
-    if (!lock_wave) {
-        change_wave(esp_random() % numwaves_random);
-        apply_wave_constraints();
-    }
-    if (!lock_palette)   fill_lut_buffer(esp_random() % numluts);
-    // Display and translate are only randomized when the active wave allows it
-    if (!wave_is_exclusive()) {
-        if (!lock_display)   curdisplay = change_display(esp_random() % numdisplays);
-        if (!lock_translate && nrtrans && !(esp_random() % 5))
-            translate_idx = esp_random() % nrtrans;
-    }
+    // Tiered randomization — keeps a partial theme alive between full overhauls.
+    // roll 0-3 (40%): full — change everything
+    // roll 4-5 (20%): color refresh — flame + palette + wave table + pal-cycle
+    // roll 6-7 (20%): content refresh — wave + boom + fft + alignment
+    // roll 8-9 (20%): geometry refresh — display + translation
+    static const int speeds[] = {5, 10, 20};
+    int roll = (int)(esp_random() % 10);
 
-    // These flags are not per-axis locked — always re-rolled
-    curtable      = esp_random() % NUMTABLES;
-    use_fft       = !(esp_random() % 4);
-    use_pal_cycle = !(esp_random() % 4);
-    if (use_pal_cycle) {
-        static const int speeds[] = {5, 10, 20};
-        pal_cycle_speed = speeds[esp_random() % 3];
-    }
-    use_alignment = !(esp_random() % 2);
+    if (roll < 4) {
+        // Full randomize
+        if (!lock_flame)   curflame = change_flame(esp_random());
+        if (!lock_wave) {
+            change_wave(esp_random() % numwaves_random);
+            apply_wave_constraints();
+        }
+        if (!lock_palette) fill_lut_buffer(esp_random() % numluts);
+        if (!wave_is_exclusive()) {
+            if (!lock_display) curdisplay = change_display(esp_random() % numdisplays);
+            if (!lock_translate && nrtrans && !(esp_random() % 5))
+                translate_idx = esp_random() % nrtrans;
+        }
+        curtable      = esp_random() % NUMTABLES;
+        use_fft       = !(esp_random() % 4);
+        use_pal_cycle = !(esp_random() % 4);
+        if (use_pal_cycle) pal_cycle_speed = speeds[esp_random() % 3];
+        use_alignment = !(esp_random() % 2);
+        if (!lock_boom) boom_boxes_randomize();
 
-    if (!lock_boom) boom_boxes_randomize();
+    } else if (roll < 6) {
+        // Color refresh: flame + palette + wave table + pal-cycle
+        if (!lock_flame)   curflame = change_flame(esp_random());
+        if (!lock_palette) fill_lut_buffer(esp_random() % numluts);
+        curtable      = esp_random() % NUMTABLES;
+        use_pal_cycle = !(esp_random() % 4);
+        if (use_pal_cycle) pal_cycle_speed = speeds[esp_random() % 3];
+
+    } else if (roll < 8) {
+        // Content refresh: wave + boom + fft + alignment
+        if (!lock_wave) {
+            change_wave(esp_random() % numwaves_random);
+            apply_wave_constraints();
+        }
+        if (!lock_boom) boom_boxes_randomize();
+        use_fft       = !(esp_random() % 4);
+        use_alignment = !(esp_random() % 2);
+
+    } else {
+        // Geometry refresh: display mode + translation
+        if (!wave_is_exclusive()) {
+            if (!lock_display) curdisplay = change_display(esp_random() % numdisplays);
+            if (!lock_translate && nrtrans && !(esp_random() % 5))
+                translate_idx = esp_random() % nrtrans;
+        }
+    }
 }
 
 // --- Touch gesture handling ---
