@@ -74,8 +74,18 @@ and the per-axis lock vector after every locked-mode gesture.
 2 (alignment) × 7 (boom off, or on × 2 color modes × 3 scales)
 = **339,148,800**
 
-The auto-randomizer changes the full combination every 3–16 seconds.
-Touch gestures cycle each numbered axis independently.
+The auto-randomizer fires every 3–16 seconds. Each fire rolls a 10-sided die
+to decide how much to change:
+
+| Roll | Probability | Axes refreshed |
+|------|-------------|----------------|
+| 0–3 | 40% | **Full overhaul** — everything: flame, wave, palette, display, translation, boom boxes, FFT, alignment, palette cycling |
+| 4–5 | 20% | **Color refresh** — flame, palette, wave table, palette cycling |
+| 6–7 | 20% | **Content refresh** — wave, boom boxes, FFT, zero-crossing alignment |
+| 8–9 | 20% | **Geometry refresh** — display mode, translation |
+
+Startup and five-finger tap exits always trigger a full overhaul regardless of the
+die roll. Touch gestures cycle each numbered axis independently.
 
 ### Flames (15) — `flame=N`
 
@@ -200,18 +210,19 @@ color relationship between audio amplitude and drawn pixels.
 | 8 | Half V | V-shape, half amplitude |
 | 9 | Inv. half V | Inverted V with high floor (~127–255) |
 
-### Special Modes (randomized each cycle, not a numbered axis)
+### Special Modes (not a numbered axis — touched by specific refresh tiers)
 
 **Pseudo-FFT palette morph** (`fft=N`) — analyzes zero-crossing run lengths
 and peak-to-peak amplitudes each frame and blends palette entries toward
 adjacent palettes by 0–6 steps. Percussive audio produces sudden
-full-palette surges; steady tones give a gentle drift. 25% chance per
-cycle. Toggle manually with **three-finger tap**. Ported from `FFT()` in
-the original Cthugha v5.3 `PETE.C` (disabled there with `#if 0`).
+full-palette surges; steady tones give a gentle drift. 25% chance on full
+or content refresh. Toggle manually with **three-finger tap**. Ported from
+`FFT()` in the original Cthugha v5.3 `PETE.C` (disabled there with `#if 0`).
 
 **Palette cycling** (`palcyc=N`) — rotates the 256-entry palette by one
 step every N frames, causing colors to swim through the visual content
-independently of audio. 25% chance per cycle. Speed is also randomized:
+independently of audio. 25% chance on full or color refresh. Speed is also
+randomized:
 
 | Speed | Frames/step | Full 256-entry cycle |
 |-------|-------------|----------------------|
@@ -222,8 +233,8 @@ independently of audio. 25% chance per cycle. Speed is also randomized:
 **Zero-crossing alignment** (`align=N`) — before each frame, the audio
 buffer is rotated so it starts at the first upward zero-crossing of each
 stereo channel. Gives line-based and spike-based waves a stable phase
-reference rather than swimming left/right each frame. 50% chance per
-cycle.
+reference rather than swimming left/right each frame. 50% chance on full
+or content refresh.
 
 **Boom boxes** (`boom=N tblclr=N scale=N`) — two colored squares (one per
 stereo channel) bounce around the buffer seeding pixels that the flame
