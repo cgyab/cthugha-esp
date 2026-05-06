@@ -372,6 +372,16 @@ see the original `CTHUGHA.H` header for terms.
 Boom boxes feature, three original `.MAP` palettes (Neon, Fire Storm, Volcano),
 and Moles translate/wave generators sourced from this TypeScript port.
 
+This project is governed by the acceptable use terms of the original Cthugha v5.3
+and cthugha-js. The ESP32 port and original additions in this repository are
+offered under the same non-commercial open-source spirit.
+
+**Startup screen artwork** (`main/logo_data.c`, `main/logo_data.h`) —
+copyright the original creator, used with permission for this project only.
+Any fork or derived work must replace these files with original artwork.
+A commented-out drop-in circle replacement (Bresenham, r=80, center 120,120)
+is provided in `main/logo_data.c` for convenience.
+
 **ESP-IDF** — https://github.com/espressif/esp-idf
 
 **waveshare/esp_lcd_st7703** and **espressif/esp_lcd_touch_gt911** via
