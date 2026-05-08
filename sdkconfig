@@ -786,6 +786,12 @@ CONFIG_CTHUGHA_TOUCH_I2C_SCL_GPIO=8
 CONFIG_CTHUGHA_TOUCH_RST_GPIO=5
 CONFIG_CTHUGHA_TOUCH_INT_GPIO=6
 # end of I2C Touch
+
+#
+# SD Card Recording
+#
+# CONFIG_CTHUGHA_SDCARD_ENABLED is not set
+# end of SD Card Recording
 # end of Cthugha Configuration
 
 #
