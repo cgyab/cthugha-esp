@@ -20,6 +20,7 @@
 #include "audio_capture.h"
 #include "touch_input.h"
 #include "boom_box.h"
+#include "sdcard_record.h"
 
 static const char *TAG = "cthugha";
 
@@ -237,6 +238,10 @@ static void handle_touch(touch_gesture_t gesture)
             case TOUCH_SWIPE_DOWN:   lock_translate = !lock_translate; break;
             case TOUCH_TWO_FINGER_TAP: lock_boom    = !lock_boom;      break;
 
+            case TOUCH_TWO_FINGER_SWIPE_DOWN:
+                sdcard_record_toggle();
+                break;
+
             case TOUCH_LONG_PRESS: {
                 // If all axes locked: full unlock + randomize.
                 // If some axes unlocked: unlock global, resume with current locks.
@@ -327,6 +332,10 @@ static void handle_touch(touch_gesture_t gesture)
 
             case TOUCH_TWO_FINGER_TAP:
                 boom_boxes_active = !boom_boxes_active;
+                break;
+
+            case TOUCH_TWO_FINGER_SWIPE_DOWN:
+                sdcard_record_toggle();
                 break;
 
             case TOUCH_THREE_FINGER_TAP:
@@ -498,6 +507,9 @@ static void render_task(void *arg)
             }
         }
 
+        // Capture frame to SD card if recording is active
+        sdcard_record_frame(buff);
+
         // Scale and send to LCD
         display_render();
 
@@ -548,6 +560,7 @@ void app_main(void)
     display_init();
     touch_input_init();
     audio_capture_init();
+    sdcard_record_init();
 
     ESP_LOGI(TAG, "Starting render loop");
 

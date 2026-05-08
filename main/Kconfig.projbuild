@@ -62,4 +62,65 @@ menu "Cthugha Configuration"
             default 6
     endmenu
 
+    menu "SD Card Recording"
+        config CTHUGHA_SDCARD_ENABLED
+            bool "Enable SD card AVI recording"
+            default n
+            help
+                When enabled, the visualization can be recorded to an SD card as
+                an uncompressed AVI file.  Toggle recording with a four-finger tap
+                while in locked mode.  Convert for YouTube with:
+                  ffmpeg -i cth0001.avi -vf scale=720:720 out.mp4
+
+        config CTHUGHA_SDCARD_LDO_CHAN
+            int "Internal LDO channel powering the SD card slot"
+            default 4
+            depends on CTHUGHA_SDCARD_ENABLED
+            help
+                On the Waveshare ESP32-P4-WIFI6-Touch-LCD-4B, LDO 4 provides
+                3.3V to the SD card slot.  Must be configured via sd_pwr_ctrl
+                and attached to the SDMMC host before mounting.
+
+        config CTHUGHA_SDCARD_MAX_RECORDINGS
+            int "Maximum number of recordings to keep"
+            default 10
+            range 1 9999
+            depends on CTHUGHA_SDCARD_ENABLED
+            help
+                When this limit is reached, numbering wraps back to 0001 and
+                old files are overwritten.
+
+        config CTHUGHA_SDCARD_MAX_FRAMES
+            int "Maximum frames per recording"
+            default 2700
+            range 60 216000
+            depends on CTHUGHA_SDCARD_ENABLED
+            help
+                Recording stops automatically after this many frames.
+                At 15 fps: 2700 = 180 s (3 min), 1800 = 120 s.
+
+        config CTHUGHA_SDCARD_FPS
+            int "Recording frame rate"
+            default 15
+            range 1 60
+            depends on CTHUGHA_SDCARD_ENABLED
+            help
+                Frames per second in the output AVI.  Every (60/FPS) render
+                frames are sampled, so the render loop is not slowed.
+                Consumer A2 cards sustain ~1 MB/s writes; 15 fps × 57 KB =
+                ~855 KB/s fits within that ceiling.  Higher rates will drop
+                frames on typical cards.
+
+        config CTHUGHA_SDCARD_NUM_BUFS
+            int "Number of PSRAM frame buffers"
+            default 3
+            range 2 16
+            depends on CTHUGHA_SDCARD_ENABLED
+            help
+                Ring buffer depth for the SD writer.  Each buffer is 58 KB
+                in PSRAM (57,600 bytes indexed + 8-byte chunk header).
+                8 buffers absorb a full 250 ms SD slow-flush window at 15 fps
+                without dropping frames.
+    endmenu
+
 endmenu

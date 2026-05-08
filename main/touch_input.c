@@ -114,7 +114,10 @@ touch_gesture_t touch_input_poll(void)
         } else if (max_fingers == 3) {
             gesture = TOUCH_THREE_FINGER_TAP;
         } else if (max_fingers == 2) {
-            gesture = TOUCH_TWO_FINGER_TAP;
+            if (dy > SWIPE_THRESHOLD)
+                gesture = TOUCH_TWO_FINGER_SWIPE_DOWN;
+            else
+                gesture = TOUCH_TWO_FINGER_TAP;
         } else if (duration > pdMS_TO_TICKS(LONG_PRESS_MS)) {
             gesture = TOUCH_LONG_PRESS;
         } else if (abs(dx) > SWIPE_THRESHOLD || abs(dy) > SWIPE_THRESHOLD) {
