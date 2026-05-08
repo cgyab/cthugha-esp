@@ -261,6 +261,23 @@ static void handle_touch(touch_gesture_t gesture)
                 use_fft = !use_fft;
                 break;
 
+            case TOUCH_FOUR_FINGER_TAP:
+                curflame     = change_flame(3);
+                change_wave(5);
+                apply_wave_constraints();
+                curdisplay   = change_display(0);
+                translate_idx = 0;
+                fill_lut_buffer(1);
+                curtable     = 0;
+                use_fft      = 0;
+                use_pal_cycle = 0;
+                use_alignment = 1;
+                boom_boxes_active = 0;
+                locked = 1;
+                set_all_axis_locks(1);
+                ESP_LOGI(TAG, "HOME: canonical Cthugha locked");
+                break;
+
             case TOUCH_FIVE_FINGER_TAP:
                 // Falls through to shared lm handler below.
                 goto lm_trigger;

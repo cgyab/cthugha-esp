@@ -47,6 +47,7 @@ continues to change.
 | Two-finger tap | Boom box lock |
 | Two-finger swipe down | Toggle SD card recording on/off |
 | Three-finger tap | Toggle FFT (same as unlocked) |
+| Four-finger tap | **Home** — canonical Cthugha preset + lock (same as unlocked) |
 | Double tap | **Nuclear** — clear all locks + full randomize |
 | Long press (all axes locked) | **Unlock all** + full randomize |
 | Long press (some axes unlocked) | **Resume** — restart auto-timer respecting current locks |
