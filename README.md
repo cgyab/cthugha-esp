@@ -413,6 +413,13 @@ next swipe-down.
 Files are written to the SD card root as `cth0001.avi`, `cth0002.avi`, …
 up to `MAX_RECORDINGS` (default 10), then wrapping back to `cth0001.avi`.
 
+On each boot the device scans the card to find the highest-numbered
+existing file and continues from there.  If all slots are full (the
+previous session wrapped), the scan finds the highest number (e.g. 10),
+increments past `MAX_RECORDINGS`, and wraps back to `cth0001.avi` —
+so a fresh boot after a full wrap always restarts from slot 1 rather
+than continuing from the slot where the last session stopped.
+
 - **Format:** RIFF AVI / BI_RGB / 8-bit palettised / 240×240
 - **Default:** 15 fps, 2700 frames = 3 minutes, ~156 MB per clip
 - Palette is snapshotted from the active palette at the moment recording
