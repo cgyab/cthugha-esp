@@ -25,6 +25,7 @@ MIPI-DSI touchscreen at ~60 fps.
 | Swipe down | Next translation effect |
 | Double tap | Randomize all effects |
 | Two-finger tap | Toggle boom boxes on/off |
+| Two-finger swipe down | Toggle SD card recording on/off |
 | Three-finger tap | Toggle pseudo-FFT palette morph on/off |
 | Four-finger tap | **Home** — canonical Cthugha preset + lock |
 | Long press | **Lock** — freeze current combo and enter lock-config mode |
@@ -44,8 +45,8 @@ continues to change.
 | Swipe up | Display lock |
 | Swipe down | Translate lock |
 | Two-finger tap | Boom box lock |
+| Two-finger swipe down | Toggle SD card recording on/off |
 | Three-finger tap | Toggle FFT (same as unlocked) |
-| Four-finger tap | **Home** — canonical Cthugha preset + lock (same as unlocked) |
 | Double tap | **Nuclear** — clear all locks + full randomize |
 | Long press (all axes locked) | **Unlock all** + full randomize |
 | Long press (some axes unlocked) | **Resume** — restart auto-timer respecting current locks |
@@ -53,6 +54,9 @@ continues to change.
 **Four-finger tap** returns to the canonical Cthugha preset from anywhere
 (Up Slow flame, Line HS wave, Fire palette, no transforms) and locks it —
 a known-good starting point you can always return to.
+
+**Two-finger swipe down** toggles SD card recording in both locked and
+unlocked mode (see [SD Card Recording](#sd-card-recording) below).
 
 **Typical workflow:**
 1. A great palette appears → **long press** to freeze everything
@@ -366,9 +370,75 @@ cthugha_esp/
     ├── audio_capture.c/h       # I2S capture, MAV AGC, zero-crossing alignment
     ├── boom_box.c/h            # Audio-reactive bouncing colored squares
     ├── touch_input.c/h         # GT911 touch + gesture detection
-    ├── Kconfig.projbuild       # Menuconfig GPIO/I2S options
+    ├── sdcard_record.c/h       # SD card AVI recording (optional, see menuconfig)
+    ├── Kconfig.projbuild       # Menuconfig GPIO/I2S/SD options
     └── idf_component.yml       # Managed component dependencies
 ```
+
+---
+
+## SD Card Recording
+
+The visualization can be recorded to a microSD card as an AVI file and
+converted to MP4 for sharing.
+
+### Enable
+
+```bash
+idf.py menuconfig
+# Cthugha Configuration → SD Card Recording → Enable SD card AVI recording
+```
+
+### SD card requirements
+
+- **Format:** FAT32 (cards ≤32 GB format as FAT32 by default; cards >32 GB
+  ship as exFAT and must be reformatted — FAT32 with 32 KB allocation units)
+- **Speed:** V30 class or better for sustained writes at 15 fps.
+  Tested reference card: **Kingston 128 GB microSDXC Canvas Go Plus** (V30/A2)
+- UHS-II and very high-speed cards (V90) may perform *worse* than V30 in
+  compatibility mode — the SDMMC interface runs at 20 MHz (standard SD),
+  which does not benefit from high-speed flash controllers optimized for
+  burst transfers
+
+### Gesture
+
+**Two-finger swipe down** — toggles recording on/off from any mode
+(locked or unlocked).  A new numbered file is opened on start;
+recording stops automatically when `MAX_FRAMES` is reached or on the
+next swipe-down.
+
+### Output files
+
+Files are written to the SD card root as `cth0001.avi`, `cth0002.avi`, …
+up to `MAX_RECORDINGS` (default 10), then wrapping back to `cth0001.avi`.
+
+- **Format:** RIFF AVI / BI_RGB / 8-bit palettised / 240×240
+- **Default:** 15 fps, 2700 frames = 3 minutes, ~156 MB per clip
+- Palette is snapshotted from the active palette at the moment recording
+  starts; mid-clip palette changes are not captured in the file
+
+### Convert and share
+
+```bash
+# Basic conversion, scaled to 720×720 for the square aspect ratio:
+ffmpeg -i cth0001.avi -vf scale=720:720 out.mp4
+
+# Higher quality for YouTube:
+ffmpeg -i cth0001.avi -vf scale=720:720 -c:v libx264 -crf 18 -preset slow out.mp4
+```
+
+Direct AVI playback on Linux is unreliable for 8-bit palettised video;
+always convert via ffmpeg first.
+
+### Configuration (menuconfig)
+
+| Option | Default | Notes |
+|--------|---------|-------|
+| Recording frame rate | 15 fps | 15 fps fits V30 sustained write speed (~855 KB/s); higher rates drop frames |
+| Maximum frames | 2700 | 2700 × 15 fps = 3 minutes |
+| Maximum recordings | 10 | Wraps and overwrites oldest when exceeded |
+| PSRAM frame buffers | 3 | Ring buffer depth; 3 is the sweet spot for V30 at 15 fps |
+| LDO channel | 4 | Internal LDO powering the SD slot on the Waveshare board |
 
 ---
 
