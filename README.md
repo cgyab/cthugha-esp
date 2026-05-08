@@ -422,8 +422,18 @@ than continuing from the slot where the last session stopped.
 
 - **Format:** RIFF AVI / BI_RGB / 8-bit palettised / 240×240
 - **Default:** 15 fps, 2700 frames = 3 minutes, ~156 MB per clip
-- Palette is snapshotted from the active palette at the moment recording
-  starts; mid-clip palette changes are not captured in the file
+- The palette is snapshotted from `LUTbuffer` at the moment recording
+  starts and fixed for the entire clip.  For a static palette the
+  recorded colors are faithful to what was displayed.  Three effects
+  cause the recording to diverge from the screen mid-clip:
+  - **Palette cycling** — the rotating color-swim effect is applied at
+    render time and is not baked into the stored pixel indices
+  - **FFT palette morph** — per-frame `LUTbuffer` blends are not
+    captured in the fixed AVI palette
+  - **Palette change** — a gesture or randomizer event that switches
+    palette mid-recording updates the display but not the AVI header
+  For best color fidelity start recording after the palette has settled
+  and avoid triggering palette cycling or FFT during the clip
 
 ### Convert and share
 
