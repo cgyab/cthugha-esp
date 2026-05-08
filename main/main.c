@@ -47,14 +47,15 @@ static int lock_palette   = 0;
 static int lock_display   = 0;
 static int lock_translate = 0;
 static int lock_boom      = 0;
+static int lock_fft       = 0;
 
 static int all_axes_locked(void) {
     return lock_flame && lock_wave && lock_palette
-        && lock_display && lock_translate && lock_boom;
+        && lock_display && lock_translate && lock_boom && lock_fft;
 }
 static void set_all_axis_locks(int v) {
     lock_flame = lock_wave = lock_palette =
-    lock_display = lock_translate = lock_boom = v;
+    lock_display = lock_translate = lock_boom = lock_fft = v;
 }
 static int startup_hold   = 900;  // frames to hold lm on boot before randomizer
 static int lm_timer = 0;    // frames remaining in a touch-triggered lm display
@@ -174,7 +175,7 @@ static void randomize_full(void)
             translate_idx = esp_random() % nrtrans;
     }
     curtable      = esp_random() % NUMTABLES;
-    use_fft       = !(esp_random() % 4);
+    if (!lock_fft) use_fft = !(esp_random() % 4);
     use_pal_cycle = !(esp_random() % 4);
     if (use_pal_cycle) pal_cycle_speed = speeds[esp_random() % 3];
     use_alignment = !(esp_random() % 2);
@@ -209,7 +210,7 @@ static void randomize_all(void)
             apply_wave_constraints();
         }
         if (!lock_boom) boom_boxes_randomize();
-        use_fft       = !(esp_random() % 4);
+        if (!lock_fft) use_fft = !(esp_random() % 4);
         use_alignment = !(esp_random() % 2);
 
     } else {
@@ -236,7 +237,8 @@ static void handle_touch(touch_gesture_t gesture)
             case TOUCH_SWIPE_LEFT:   lock_palette   = !lock_palette;   break;
             case TOUCH_SWIPE_UP:     lock_display   = !lock_display;   break;
             case TOUCH_SWIPE_DOWN:   lock_translate = !lock_translate; break;
-            case TOUCH_TWO_FINGER_TAP: lock_boom    = !lock_boom;      break;
+            case TOUCH_TWO_FINGER_TAP:        lock_boom = !lock_boom;  break;
+            case TOUCH_THREE_FINGER_TAP:      lock_fft  = !lock_fft;   break;
 
             case TOUCH_TWO_FINGER_SWIPE_DOWN:
                 sdcard_record_toggle();
@@ -255,10 +257,6 @@ static void handle_touch(touch_gesture_t gesture)
                 // Nuclear option: clear all locks and full randomize.
                 set_all_axis_locks(0);
                 randomize_all();
-                break;
-
-            case TOUCH_THREE_FINGER_TAP:
-                use_fft = !use_fft;
                 break;
 
             case TOUCH_FOUR_FINGER_TAP:
@@ -286,10 +284,10 @@ static void handle_touch(touch_gesture_t gesture)
         }
 
         // Log the lock state after any locked-mode gesture
-        ESP_LOGI(TAG, "LOCKS [%s]: flame=%d wave=%d pal=%d disp=%d trans=%d boom=%d",
+        ESP_LOGI(TAG, "LOCKS [%s]: flame=%d wave=%d pal=%d disp=%d trans=%d boom=%d fft=%d",
                  locked ? "locked" : "UNLOCKED",
                  lock_flame, lock_wave, lock_palette,
-                 lock_display, lock_translate, lock_boom);
+                 lock_display, lock_translate, lock_boom, lock_fft);
 
     } else {
         // Normal unlocked mode: gestures cycle effects.
